@@ -2825,10 +2825,10 @@ function init() {
     if (el) initPullToRefresh(el);
   });
 
-  // Register SW（強制更新）
+  // Register SW
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').then(reg => {
-      reg.update(); // 每次啟動都檢查更新
+      if (reg) reg.update().catch(() => {});
     }).catch(() => {});
   }
 
