@@ -60,15 +60,16 @@
 
   /* ===== SYNC DOT ===== */
   .sync-dot {
-    position: fixed;
+    position: absolute;
     top: 12px;
     right: 14px;
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background: #ccc;
     z-index: 200;
     transition: background .3s;
+    cursor: default;
   }
   .sync-dot.syncing { background: #f0a500; animation: pulse 1s infinite; }
   .sync-dot.ok { background: #2d9a4e; }
@@ -1147,8 +1148,8 @@
 </style>
 </head>
 <body>
-<div id="syncDot" class="sync-dot idle" title=""></div>
 <div id="app">
+<div id="syncDot" class="sync-dot idle" title="同步狀態"></div>
   <!-- HOME VIEW -->
   <div id="homeView" class="view active">
     <div class="sidebar" id="sidebar"></div>
@@ -2666,9 +2667,11 @@ function init() {
   renderTrip();
   renderBudget();
 
-  // Register SW
+  // Register SW（強制更新）
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.update(); // 每次啟動都檢查更新
+    }).catch(() => {});
   }
 
   // Cloud sync: pull latest on load
