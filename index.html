@@ -1190,11 +1190,13 @@
       <input id="syncIdNew" type="text" placeholder="例：trip-abc12345" style="flex:1;border:1.5px solid #e0e0e0;border-radius:10px;padding:10px 12px;font-size:14px;font-family:monospace;outline:none;">
       <button onclick="applySyncId()" style="background:#D62828;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;">套用</button>
     </div>
+    <button onclick="closeSyncPanel();pullFromCloud(true);" style="width:100%;background:#f5f5f7;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:12px;">🔄 立即同步（拉取最新資料）</button>
     <div style="font-size:12px;color:#8e8e93;line-height:1.6;">
       💡 <b>怎麼用：</b><br>
       1. 在手機上複製連接碼<br>
       2. 在電腦上貼到「輸入其他裝置的連接碼」並按套用<br>
-      3. 兩台就會同步同一份行程
+      3. 兩台就會同步同一份行程<br>
+      4. 手機往下拉 或 電腦按「立即同步」可手動更新
     </div>
   </div>
 </div>
@@ -2836,15 +2838,17 @@ function init() {
     }).catch(() => {});
   }
 
-  // Cloud sync: 若本地有資料先推送，再拉雲端比較
+  // Cloud sync 初始化
   const localPlaces = (state.days || []).reduce((n, d) => n + (d.places || []).length, 0);
   if (localPlaces > 0 && !localStorage.getItem('japanTripTs')) {
-    // 首次啟用同步：本地有紀錄但從沒同步過 → 先推送本地
     saveStateLocal();
     setTimeout(() => { pushToCloud().then(() => pullFromCloud()); }, 800);
   } else {
     setTimeout(pullFromCloud, 800);
   }
+
+  // 每 30 秒自動檢查雲端是否有更新
+  setInterval(() => pullFromCloud(false), 30000);
 }
 
 init();
