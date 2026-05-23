@@ -1805,10 +1805,14 @@ async function applySyncId() {
   if (!newId) { showToast('請輸入連接碼'); return; }
   if (newId === getSyncId()) { showToast('已經是這個連接碼了'); return; }
   localStorage.setItem('japanTripSyncId', newId);
-  localStorage.removeItem('japanTripTs'); // 清除時間戳，確保從雲端拉
+  localStorage.removeItem('japanTripTs');
   closeSyncPanel();
-  showToast('已切換連接碼，正在載入雲端資料…');
-  await pullFromCloud();
+  showToast('切換中，正在同步…');
+  // 先拉雲端（如果雲端資料更完整就用雲端的）
+  await pullFromCloud(false);
+  // 再把本機資料推上去（確保本機的地點不會消失）
+  await pushToCloud();
+  showToast('同步完成！✅');
 }
 
 // ===== STORAGE =====
