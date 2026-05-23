@@ -1648,7 +1648,14 @@ async function pullFromCloud() {
     if (json.data) {
       const localTs = parseInt(localStorage.getItem('japanTripTs') || '0');
       const serverTs = new Date(json.updated_at).getTime();
-      if (serverTs > localTs) {
+
+      // 計算本地與雲端各有幾個地點
+      const countPlaces = d => (d.days || []).reduce((n, day) => n + (day.places || []).length, 0);
+      const localCount = countPlaces(state);
+      const serverCount = countPlaces(json.data);
+
+      // 只有「雲端比本地新」且「地點數不少於本地」才覆蓋
+      if (serverTs > localTs && serverCount >= localCount) {
         state = { ...state, ...json.data };
         saveStateLocal();
         renderHome(); renderTrip(); renderBudget();
@@ -2674,8 +2681,15 @@ function init() {
     }).catch(() => {});
   }
 
-  // Cloud sync: pull latest on load
-  setTimeout(pullFromCloud, 800);
+  // Cloud sync: 若本地有資料先推送，再拉雲端比較
+  const localPlaces = (state.days || []).reduce((n, d) => n + (d.places || []).length, 0);
+  if (localPlaces > 0 && !localStorage.getItem('japanTripTs')) {
+    // 首次啟用同步：本地有紀錄但從沒同步過 → 先推送本地
+    saveStateLocal();
+    setTimeout(() => { pushToCloud().then(() => pullFromCloud()); }, 800);
+  } else {
+    setTimeout(pullFromCloud, 800);
+  }
 }
 
 init();
