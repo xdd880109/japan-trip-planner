@@ -58,6 +58,23 @@
   }
   .view.active { display: flex; flex-direction: column; }
 
+  /* ===== SYNC DOT ===== */
+  .sync-dot {
+    position: fixed;
+    top: 12px;
+    right: 14px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccc;
+    z-index: 200;
+    transition: background .3s;
+  }
+  .sync-dot.syncing { background: #f0a500; animation: pulse 1s infinite; }
+  .sync-dot.ok { background: #2d9a4e; }
+  .sync-dot.err { background: #D62828; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
   /* ===== BOTTOM NAV ===== */
   .bottom-nav {
     position: fixed;
@@ -1130,6 +1147,7 @@
 </style>
 </head>
 <body>
+<div id="syncDot" class="sync-dot idle" title=""></div>
 <div id="app">
   <!-- HOME VIEW -->
   <div id="homeView" class="view active">
@@ -1577,9 +1595,80 @@ let calCheckIn = null;
 let calCheckOut = null;
 let calSelectStep = 0; // 0=select checkIn, 1=select checkOut
 
+// ===== CLOUD SYNC =====
+const SYNC_API = 'https://n8n.srv790689.hstgr.cloud/jt';
+const SYNC_KEY = 'japan-trip-secret-2026';
+
+function getSyncId() {
+  let id = localStorage.getItem('japanTripSyncId');
+  if (!id) {
+    id = 'trip-' + Math.random().toString(36).slice(2,10);
+    localStorage.setItem('japanTripSyncId', id);
+  }
+  return id;
+}
+
+let syncTimer = null;
+let syncStatus = 'idle'; // idle | syncing | ok | err
+
+function setSyncStatus(s) {
+  syncStatus = s;
+  const el = document.getElementById('syncDot');
+  if (!el) return;
+  el.className = 'sync-dot ' + s;
+  el.title = s === 'syncing' ? '同步中…' : s === 'ok' ? '已同步' : s === 'err' ? '同步失敗' : '';
+}
+
+async function pushToCloud() {
+  setSyncStatus('syncing');
+  try {
+    const res = await fetch(`${SYNC_API}/state/${getSyncId()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': SYNC_KEY },
+      body: JSON.stringify({ data: state })
+    });
+    setSyncStatus(res.ok ? 'ok' : 'err');
+  } catch(e) { setSyncStatus('err'); }
+}
+
+function schedulePush() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushToCloud, 1500);
+}
+
+async function pullFromCloud() {
+  setSyncStatus('syncing');
+  try {
+    const res = await fetch(`${SYNC_API}/state/${getSyncId()}`, {
+      headers: { 'X-Api-Key': SYNC_KEY }
+    });
+    if (!res.ok) { setSyncStatus('err'); return; }
+    const json = await res.json();
+    if (json.data) {
+      const localTs = parseInt(localStorage.getItem('japanTripTs') || '0');
+      const serverTs = new Date(json.updated_at).getTime();
+      if (serverTs > localTs) {
+        state = { ...state, ...json.data };
+        saveStateLocal();
+        renderHome(); renderTrip(); renderBudget();
+        showToast('已從雲端載入最新行程 ☁️');
+      }
+    }
+    setSyncStatus('ok');
+  } catch(e) { setSyncStatus('err'); }
+}
+
 // ===== STORAGE =====
+function saveStateLocal() {
+  try {
+    localStorage.setItem('japanTrip', JSON.stringify(state));
+    localStorage.setItem('japanTripTs', Date.now().toString());
+  } catch(e) {}
+}
+
 function saveState() {
-  try { localStorage.setItem('japanTrip', JSON.stringify(state)); } catch(e) {}
+  saveStateLocal();
+  schedulePush();
 }
 function loadState() {
   try {
@@ -2556,6 +2645,20 @@ document.querySelectorAll('.modal-overlay, .accom-overlay').forEach(overlay => {
   });
 });
 
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;z-index:9999;pointer-events:none;transition:opacity .3s;max-width:300px;text-align:center';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
 // ===== INIT =====
 function init() {
   loadState();
@@ -2567,6 +2670,9 @@ function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+
+  // Cloud sync: pull latest on load
+  setTimeout(pullFromCloud, 800);
 }
 
 init();
