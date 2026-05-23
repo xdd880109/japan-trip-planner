@@ -69,7 +69,7 @@
     background: #ccc;
     z-index: 200;
     transition: background .3s;
-    cursor: default;
+    cursor: pointer;
   }
   .sync-dot.syncing { background: #f0a500; animation: pulse 1s infinite; }
   .sync-dot.ok { background: #2d9a4e; }
@@ -1149,7 +1149,36 @@
 </head>
 <body>
 <div id="app">
-<div id="syncDot" class="sync-dot idle" title="同步狀態"></div>
+<div id="syncDot" class="sync-dot idle" title="同步狀態" onclick="openSyncPanel()"></div>
+
+<!-- SYNC PANEL -->
+<div id="syncPanel" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;" onclick="if(event.target===this)closeSyncPanel()">
+  <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;padding-bottom:40px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-size:17px;font-weight:700">☁️ 雲端同步設定</div>
+      <button onclick="closeSyncPanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666">✕</button>
+    </div>
+    <div style="font-size:13px;color:#636366;margin-bottom:8px;font-weight:600">目前連接碼</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input id="syncIdInput" type="text" style="flex:1;border:1.5px solid #e0e0e0;border-radius:10px;padding:10px 12px;font-size:15px;font-family:monospace;outline:none;" readonly>
+      <button onclick="copySyncId()" style="background:#f5f5f7;border:none;border-radius:10px;padding:10px 14px;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap;">複製</button>
+    </div>
+    <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;line-height:1.6;">
+      ⚠️ 多台裝置要同步，請在<b>每台裝置</b>上輸入<b>同一個連接碼</b>，然後按「套用」。
+    </div>
+    <div style="font-size:13px;color:#636366;margin-bottom:8px;font-weight:600">輸入其他裝置的連接碼</div>
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <input id="syncIdNew" type="text" placeholder="例：trip-abc12345" style="flex:1;border:1.5px solid #e0e0e0;border-radius:10px;padding:10px 12px;font-size:14px;font-family:monospace;outline:none;">
+      <button onclick="applySyncId()" style="background:#D62828;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;">套用</button>
+    </div>
+    <div style="font-size:12px;color:#8e8e93;line-height:1.6;">
+      💡 <b>怎麼用：</b><br>
+      1. 在手機上複製連接碼<br>
+      2. 在電腦上貼到「輸入其他裝置的連接碼」並按套用<br>
+      3. 兩台就會同步同一份行程
+    </div>
+  </div>
+</div>
   <!-- HOME VIEW -->
   <div id="homeView" class="view active">
     <div class="sidebar" id="sidebar"></div>
@@ -1664,6 +1693,33 @@ async function pullFromCloud() {
     }
     setSyncStatus('ok');
   } catch(e) { setSyncStatus('err'); }
+}
+
+function openSyncPanel() {
+  document.getElementById('syncIdInput').value = getSyncId();
+  document.getElementById('syncIdNew').value = '';
+  const p = document.getElementById('syncPanel');
+  p.style.display = 'flex';
+}
+function closeSyncPanel() {
+  document.getElementById('syncPanel').style.display = 'none';
+}
+function copySyncId() {
+  const val = document.getElementById('syncIdInput').value;
+  navigator.clipboard.writeText(val).then(() => showToast('已複製連接碼！')).catch(() => {
+    document.getElementById('syncIdInput').select();
+    showToast('請手動長按複製');
+  });
+}
+async function applySyncId() {
+  const newId = document.getElementById('syncIdNew').value.trim();
+  if (!newId) { showToast('請輸入連接碼'); return; }
+  if (newId === getSyncId()) { showToast('已經是這個連接碼了'); return; }
+  localStorage.setItem('japanTripSyncId', newId);
+  localStorage.removeItem('japanTripTs'); // 清除時間戳，確保從雲端拉
+  closeSyncPanel();
+  showToast('已切換連接碼，正在載入雲端資料…');
+  await pullFromCloud();
 }
 
 // ===== STORAGE =====
