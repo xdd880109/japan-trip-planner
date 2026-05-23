@@ -1833,6 +1833,7 @@ function loadState() {
   try {
     const s = localStorage.getItem('japanTrip');
     if (s) state = { ...state, ...JSON.parse(s) };
+    renumberDays(); // 修正舊資料的天數編號
   } catch(e) {}
 }
 
@@ -2348,6 +2349,7 @@ function saveAddDay() {
     places: []
   });
   state.days.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  renumberDays();
   saveState();
   closeModal('addDayModal');
   renderTrip();
@@ -2373,9 +2375,16 @@ function saveEditDay() {
   renderDayView();
   showToast('已更新');
 }
+function renumberDays() {
+  state.days.forEach((d, i) => {
+    if (/^第\d+天$/.test(d.title)) d.title = `第${i+1}天`;
+  });
+}
+
 function deleteCurrentDay() {
   if (!confirm('確定刪除這一天嗎？')) return;
   state.days = state.days.filter(d => d.id !== currentDayId);
+  renumberDays();
   saveState();
   closeModal('editDayModal');
   goBack();
