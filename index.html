@@ -1676,8 +1676,16 @@ async function pushToCloud() {
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': SYNC_KEY },
       body: JSON.stringify({ data: state })
     });
-    setSyncStatus(res.ok ? 'ok' : 'err');
-  } catch(e) { setSyncStatus('err'); }
+    if (!res.ok) {
+      console.error('[Sync] push failed:', res.status, res.statusText);
+      setSyncStatus('err');
+    } else {
+      setSyncStatus('ok');
+    }
+  } catch(e) {
+    console.error('[Sync] push error:', e.message, e);
+    setSyncStatus('err');
+  }
 }
 
 function schedulePush() {
@@ -1743,29 +1751,32 @@ function ptrHide() {
 }
 
 function initPullToRefresh(el) {
+  let startY = 0;
+  let startScrollTop = 0;
+  let pulling = false;
+
   el.addEventListener('touchstart', e => {
-    if (el.scrollTop === 0) {
-      ptrStartY = e.touches[0].clientY;
-      ptrPulling = true;
-    }
+    startY = e.touches[0].clientY;
+    startScrollTop = el.scrollTop;
+    pulling = false;
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
-    if (!ptrPulling) return;
-    const dy = e.touches[0].clientY - ptrStartY;
-    if (dy > 5 && el.scrollTop === 0) {
+    const dy = e.touches[0].clientY - startY;
+    if (startScrollTop === 0 && dy > 8) {
+      pulling = true;
       const ratio = dy / PTR_THRESHOLD;
       ptrShow(dy > PTR_THRESHOLD ? '放開以同步 ↑' : '↓ 下拉同步', ratio);
-    } else {
+    } else if (!pulling) {
       ptrHide();
     }
   }, { passive: true });
 
   el.addEventListener('touchend', async e => {
-    if (!ptrPulling) return;
-    ptrPulling = false;
-    const dy = e.changedTouches[0].clientY - ptrStartY;
-    if (dy > PTR_THRESHOLD && el.scrollTop === 0) {
+    if (!pulling) return;
+    pulling = false;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (dy > PTR_THRESHOLD && startScrollTop === 0) {
       ptrShow('同步中…', 1);
       await pullFromCloud(true);
     }
