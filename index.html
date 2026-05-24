@@ -1877,7 +1877,19 @@ function showDayView(dayId) {
   document.getElementById('dayView').classList.add('active');
   document.getElementById('fabBtn').style.display = 'flex';
   renderDayView();
+  // 讓瀏覽器右滑/返回鍵回到行程頁，而不是離開 App
+  history.pushState({ dayView: true }, '');
 }
+
+window.addEventListener('popstate', (e) => {
+  const dayView = document.getElementById('dayView');
+  if (dayView.classList.contains('active')) {
+    goBack();
+  } else {
+    // 確保不會離開 App
+    history.pushState(null, '');
+  }
+});
 
 function goBack() {
   document.getElementById('dayView').classList.remove('active');
