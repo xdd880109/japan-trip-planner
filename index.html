@@ -1786,6 +1786,21 @@ function initPullToRefresh(el) {
   }, { passive: true });
 }
 
+// ===== SWIPE BACK =====
+function initSwipeBack(el) {
+  let startX = 0, startY = 0;
+  el.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = Math.abs(e.changedTouches[0].clientY - startY);
+    // 右滑距離 > 80px，且橫向位移大於縱向（避免誤觸下拉）
+    if (dx > 80 && dy < 60) goBack();
+  }, { passive: true });
+}
+
 function openSyncPanel() {
   document.getElementById('syncIdInput').value = getSyncId();
   document.getElementById('syncIdNew').value = '';
@@ -2011,13 +2026,33 @@ function renderDayView() {
 
   const content = document.getElementById('dayContent');
 
-  // Hotel banner: find accommodation active on this day
+  // Hotel banner: find accommodation spanning this day (not on this day's places)
   let hotelBanner = '';
   state.days.forEach(otherDay => {
+    if (otherDay.id === currentDayId) return; // skip current day (already rendered in places)
     otherDay.places.forEach(p => {
       if (p.isAccommodation && p.checkIn && p.checkOut && day.date) {
-        if (p.checkIn < day.date && day.date < p.checkOut) {
-          hotelBanner = `<div class="hotel-banner"><span class="hb-icon">🏨</span><span>住宿中：${escHtml(p.name)}</span></div>`;
+        const isMiddle = p.checkIn < day.date && day.date < p.checkOut;
+        const isCheckout = p.checkOut === day.date;
+        if (isMiddle || isCheckout) {
+          const label = isCheckout
+            ? `<span class="checkout-t">${formatDateShort(p.checkOut)} ${p.checkOutTime||'11:00'} 退房</span>`
+            : `<span class="checkin-t">${formatDateShort(p.checkIn)} ${p.checkInTime||'15:00'} 入住</span>
+               <span> → </span>
+               <span class="checkout-t">${formatDateShort(p.checkOut)} ${p.checkOutTime||'11:00'} 退房</span>`;
+          const costStr = p.cost ? formatCost(p.cost, p.currency) : '';
+          hotelBanner = `
+            <div class="place-row" style="padding:0 16px;margin-top:10px;">
+              <div class="place-card-day accom-card" onclick="editPlace('${p.id}',true)" style="opacity:0.85">
+                <div class="pcd-top">
+                  <div class="pcd-time">${isCheckout ? (p.checkOutTime||'11:00') : (p.checkInTime||'15:00')}</div>
+                  <div class="pcd-name">${escHtml(p.name)}</div>
+                  ${costStr ? `<div class="pcd-cost">${costStr}</div>` : ''}
+                </div>
+                <div class="pcd-cat"><span class="cat-badge">🏨 住宿</span></div>
+                <div class="accom-times">${label}</div>
+              </div>
+            </div>`;
         }
       }
     });
@@ -2414,10 +2449,17 @@ function openAddPlace() {
   openModal('placeModal');
 }
 
-function editPlace(placeId) {
-  const day = state.days.find(d => d.id === currentDayId);
-  if (!day) return;
-  const place = day.places.find(p => p.id === placeId);
+function editPlace(placeId, fromOtherDay = false) {
+  // 從其他天的住宿橫幅點進來，找到實際存在的那天
+  let day = state.days.find(d => d.id === currentDayId);
+  let place = day ? day.places.find(p => p.id === placeId) : null;
+  if (!place) {
+    // 從跨天住宿卡片點進來，搜尋所有天
+    for (const d of state.days) {
+      const found = d.places.find(p => p.id === placeId);
+      if (found) { day = d; place = found; break; }
+    }
+  }
   if (!place) return;
   editingPlaceId = placeId;
   placeCurrency = place.currency || 'JPY';
@@ -2839,6 +2881,9 @@ function init() {
     const el = document.getElementById(id);
     if (el) initPullToRefresh(el);
   });
+
+  // 右滑返回（只在 dayView 生效）
+  initSwipeBack(document.getElementById('dayView'));
 
   // Register SW
   if ('serviceWorker' in navigator) {
