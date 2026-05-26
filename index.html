@@ -1374,57 +1374,91 @@
     border-color: var(--red);
     color: #fff;
   }
-  /* Vinyl photo upload */
-  .vinyl-photo-area {
-    width: 100%;
-    height: 130px;
-    border: 2px dashed var(--gray-border);
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    overflow: hidden;
-    background: var(--gray-bg);
-    position: relative;
-    transition: border-color .2s;
-  }
-  .vinyl-photo-area:active { border-color: var(--red); }
-  .vinyl-photo-area img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .vinyl-photo-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
-    color: var(--gray-text);
-    font-size: 13px;
-    pointer-events: none;
-  }
-  .vinyl-photo-placeholder-icon { font-size: 32px; }
-  .vinyl-photo-remove {
+  /* Vinyl search + cover */
+  .vinyl-search-wrap { position: relative; }
+  .vinyl-search-results {
+    display: none;
     position: absolute;
-    top: 7px;
-    right: 7px;
-    background: rgba(0,0,0,.55);
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    width: 26px;
-    height: 26px;
-    font-size: 14px;
-    cursor: pointer;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--white);
+    border: 1.5px solid var(--gray-border);
+    border-radius: var(--radius-sm);
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 200;
+    box-shadow: var(--shadow-lg);
+  }
+  .vinyl-search-results.open { display: block; }
+  .vinyl-search-result {
     display: flex;
     align-items: center;
-    justify-content: center;
-    z-index: 2;
+    gap: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--gray-border);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vinyl-search-result:last-child { border-bottom: none; }
+  .vinyl-search-result:active { background: var(--gray-bg); }
+  .vinyl-result-thumb {
+    width: 44px; height: 44px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--gray-bg);
+  }
+  .vinyl-result-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .vinyl-result-artist { font-size: 12px; color: var(--text-sub); margin-top: 1px; }
+  .vinyl-search-msg { padding: 14px 12px; text-align: center; color: var(--gray-text); font-size: 13px; }
+  .vinyl-cover-row {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    background: var(--gray-bg);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 4px;
+  }
+  .vinyl-cover-row.show { display: flex; }
+  .vinyl-cover-img {
+    width: 58px; height: 58px;
+    border-radius: 7px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--gray-border);
+  }
+  .vinyl-cover-info { flex: 1; min-width: 0; }
+  .vinyl-cover-title {
+    font-size: 13px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .vinyl-cover-artist { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+  .vinyl-cover-clear {
+    background: none; border: none;
+    color: var(--gray-text); font-size: 20px;
+    cursor: pointer; padding: 4px; flex-shrink: 0; line-height: 1;
+  }
+  .vinyl-upload-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0 10px;
+    font-size: 12px;
+    color: var(--gray-text);
+  }
+  .vinyl-upload-hint button {
+    background: none;
+    border: 1px solid var(--gray-border);
+    border-radius: 20px;
+    padding: 4px 11px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-sub);
+    font-weight: 500;
   }
   .vinyl-thumb {
-    width: 52px;
-    height: 52px;
+    width: 52px; height: 52px;
     border-radius: 8px;
     overflow: hidden;
     flex-shrink: 0;
@@ -1434,11 +1468,7 @@
     justify-content: center;
     font-size: 22px;
   }
-  .vinyl-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
+  .vinyl-thumb img { width: 100%; height: 100%; object-fit: cover; }
 
   .shop-fab {
     position: fixed;
@@ -1902,26 +1932,43 @@
       </div>
       <!-- 黑膠專用欄位 -->
       <div id="shopVinylFields" style="display:none">
+        <!-- 搜尋 -->
         <div class="form-group">
-          <label class="form-label">專輯封面</label>
-          <div class="vinyl-photo-area" id="vinylPhotoArea" onclick="document.getElementById('vinylPhotoInput').click()">
-            <input type="file" id="vinylPhotoInput" accept="image/*" style="display:none" onchange="handleVinylPhoto(this)">
-            <div id="vinylPhotoPreview">
-              <div class="vinyl-photo-placeholder">
-                <span class="vinyl-photo-placeholder-icon">📷</span>
-                <span>點擊上傳 / 拍照</span>
-              </div>
-            </div>
+          <label class="form-label">搜尋唱片</label>
+          <div class="vinyl-search-wrap">
+            <input type="text" class="form-input" id="vinylSearch"
+              placeholder="輸入唱片 / 歌手名稱…"
+              autocomplete="off" spellcheck="false"
+              oninput="onVinylSearch(this)">
+            <div class="vinyl-search-results" id="vinylSearchResults"></div>
           </div>
         </div>
+        <!-- 封面預覽（搜尋選取 or 手動上傳後顯示） -->
+        <div class="vinyl-cover-row" id="vinylCoverRow">
+          <img id="vinylCoverImg" class="vinyl-cover-img" src="">
+          <div class="vinyl-cover-info">
+            <div class="vinyl-cover-title" id="vinylCoverTitle"></div>
+            <div class="vinyl-cover-artist" id="vinylCoverArtist"></div>
+          </div>
+          <button class="vinyl-cover-clear" onclick="clearVinylCover()">✕</button>
+        </div>
+        <!-- 找不到時手動上傳 -->
+        <div class="vinyl-upload-hint" id="vinylUploadHint">
+          <span>找不到？</span>
+          <button onclick="document.getElementById('vinylPhotoInput').click()">📷 手動上傳封面</button>
+          <input type="file" id="vinylPhotoInput" accept="image/*" style="display:none" onchange="handleVinylPhoto(this)">
+        </div>
+        <!-- 唱片名稱 -->
         <div class="form-group">
           <label class="form-label">唱片名稱</label>
           <input type="text" class="form-input" id="shopRecordName" placeholder="Album / Artist">
         </div>
+        <!-- UPC -->
         <div class="form-group">
           <label class="form-label">UPC 條碼</label>
           <input type="text" class="form-input" id="shopUpc" placeholder="012345678901" inputmode="numeric">
         </div>
+        <!-- 數量 -->
         <div class="form-group">
           <label class="form-label">數量</label>
           <input type="number" class="form-input" id="shopQty" value="1" min="1" placeholder="1">
@@ -2058,8 +2105,10 @@ let currentShopPerson = '全部';
 let editingShopId = null;
 let currentShopItemCat = '美妝';
 let currentShopItemPerson = '我';
-let vinylPhotoData = null;    // 目前 modal 中的圖片 data URL（null = 無）
-let vinylPhotoChanged = false; // 是否有改動（用於存檔判斷）
+let vinylPhotoData = null;    // 手動上傳的圖片 data URL
+let vinylPhotoChanged = false; // 手動圖片是否變動
+let vinylCoverUrl = null;      // iTunes 搜尋到的封面 URL
+let vinylSearchTimer = null;
 
 // Calendar state
 let calYear, calMonth;
@@ -3330,6 +3379,86 @@ function resizeImageFile(file, maxPx = 600) {
   });
 }
 
+// ── iTunes 搜尋 ──
+let _vinylSearchTimer = null;
+function onVinylSearch(input) {
+  const q = input.value.trim();
+  const resultsEl = document.getElementById('vinylSearchResults');
+  clearTimeout(_vinylSearchTimer);
+  if (!q) { resultsEl.classList.remove('open'); return; }
+  resultsEl.innerHTML = '<div class="vinyl-search-msg">搜尋中…</div>';
+  resultsEl.classList.add('open');
+  _vinylSearchTimer = setTimeout(() => doVinylSearch(q), 480);
+}
+
+async function doVinylSearch(q) {
+  const resultsEl = document.getElementById('vinylSearchResults');
+  try {
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=7&country=JP`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) {
+      resultsEl.innerHTML = '<div class="vinyl-search-msg">找不到，試試不同關鍵字</div>';
+      return;
+    }
+    resultsEl.innerHTML = data.results.map(r => {
+      const thumb = (r.artworkUrl100 || '').replace('100x100bb','100x100bb');
+      const cover = (r.artworkUrl100 || '').replace('100x100bb','600x600bb');
+      const name = escHtml(r.collectionName || r.trackName || '');
+      const artist = escHtml(r.artistName || '');
+      return `<div class="vinyl-search-result"
+        data-cover="${escHtml(cover)}"
+        data-name="${name}" data-artist="${artist}"
+        onclick="selectVinylResult(this)">
+        <img class="vinyl-result-thumb" src="${escHtml(thumb)}" loading="lazy">
+        <div>
+          <div class="vinyl-result-name">${name}</div>
+          <div class="vinyl-result-artist">${artist}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    resultsEl.innerHTML = '<div class="vinyl-search-msg">搜尋失敗，請確認網路</div>';
+  }
+}
+
+function selectVinylResult(el) {
+  vinylCoverUrl = el.dataset.cover;
+  vinylPhotoData = null;
+  vinylPhotoChanged = false;
+  const name = el.dataset.name;
+  const artist = el.dataset.artist;
+  // 自動填入唱片名稱
+  const recInput = document.getElementById('shopRecordName');
+  if (recInput && !recInput.value) recInput.value = name;
+  // 顯示封面列
+  showVinylCover(vinylCoverUrl, name, artist);
+  // 關閉下拉
+  document.getElementById('vinylSearch').value = '';
+  document.getElementById('vinylSearchResults').classList.remove('open');
+}
+
+function showVinylCover(src, title, artist) {
+  const row = document.getElementById('vinylCoverRow');
+  const hint = document.getElementById('vinylUploadHint');
+  document.getElementById('vinylCoverImg').src = src;
+  document.getElementById('vinylCoverTitle').textContent = title || '';
+  document.getElementById('vinylCoverArtist').textContent = artist || '';
+  row.classList.add('show');
+  if (hint) hint.style.display = 'none';
+}
+
+function clearVinylCover() {
+  vinylCoverUrl = null;
+  vinylPhotoData = null;
+  vinylPhotoChanged = true;
+  const row = document.getElementById('vinylCoverRow');
+  const hint = document.getElementById('vinylUploadHint');
+  row.classList.remove('show');
+  if (hint) hint.style.display = 'flex';
+}
+
+// ── 手動上傳封面（搜尋找不到時備用）──
 async function handleVinylPhoto(input) {
   const file = input.files[0];
   if (!file) return;
@@ -3337,27 +3466,8 @@ async function handleVinylPhoto(input) {
   const dataUrl = await resizeImageFile(file);
   vinylPhotoData = dataUrl;
   vinylPhotoChanged = true;
-  setVinylPhotoPreview(dataUrl);
-}
-
-function setVinylPhotoPreview(dataUrl) {
-  const preview = document.getElementById('vinylPhotoPreview');
-  if (!preview) return;
-  if (dataUrl) {
-    preview.innerHTML = `
-      <img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;display:block;">
-      <button class="vinyl-photo-remove" onclick="event.stopPropagation();removeVinylPhoto()">✕</button>`;
-  } else {
-    preview.innerHTML = `<div class="vinyl-photo-placeholder">
-      <span class="vinyl-photo-placeholder-icon">📷</span>
-      <span>點擊上傳 / 拍照</span></div>`;
-  }
-}
-
-function removeVinylPhoto() {
-  vinylPhotoData = null;
-  vinylPhotoChanged = true;
-  setVinylPhotoPreview(null);
+  vinylCoverUrl = null;
+  showVinylCover(dataUrl, '手動上傳', '');
 }
 
 async function loadVinylThumbs() {
@@ -3450,17 +3560,25 @@ function buildShopItemHtml(item, showPersonBadge) {
   const isVinyl = item.cat === '黑膠';
   const parts = [];
   if (isVinyl) {
-    if (item.recordName && item.recordName !== item.name) parts.push(item.recordName);
+    if (item.artist) parts.push(item.artist);
     if (item.upc) parts.push('UPC: ' + item.upc);
   }
   if (item.qty > 1) parts.push('×' + item.qty);
   if (item.notes) parts.push(item.notes);
   const meta = parts.join(' · ');
   const personBadge = showPersonBadge ? `<span class="shop-person-badge">${escHtml(item.person || '我')}</span>` : '';
-  // 黑膠縮圖：初始顯示 🎵，之後 loadVinylThumbs() 非同步替換成真實圖片
-  const vinylThumb = isVinyl
-    ? `<div class="vinyl-thumb" ${item.hasPhoto ? `data-vinyl-id="${item.id}"` : ''}>🎵</div>`
-    : '';
+
+  // 黑膠縮圖：coverUrl（iTunes）優先，其次 hasPhoto（本地）
+  let vinylThumb = '';
+  if (isVinyl) {
+    if (item.coverUrl) {
+      vinylThumb = `<div class="vinyl-thumb"><img src="${escHtml(item.coverUrl)}" loading="lazy"></div>`;
+    } else if (item.hasPhoto) {
+      vinylThumb = `<div class="vinyl-thumb" data-vinyl-id="${item.id}">🎵</div>`;
+    } else {
+      vinylThumb = `<div class="vinyl-thumb">🎵</div>`;
+    }
+  }
 
   return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
     <div class="shop-checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
@@ -3525,10 +3643,19 @@ function setShopPersonModal(person) {
   });
 }
 
-function openAddShopItem() {
-  editingShopId = null;
+function _resetVinylCoverUI() {
+  vinylCoverUrl = null;
   vinylPhotoData = null;
   vinylPhotoChanged = false;
+  document.getElementById('vinylSearch').value = '';
+  document.getElementById('vinylSearchResults').classList.remove('open');
+  document.getElementById('vinylCoverRow').classList.remove('show');
+  const hint = document.getElementById('vinylUploadHint');
+  if (hint) hint.style.display = 'flex';
+}
+
+function openAddShopItem() {
+  editingShopId = null;
   document.getElementById('shopItemModalTitle').textContent = '新增項目';
   document.getElementById('shopDeleteBtn').style.display = 'none';
   document.getElementById('shopName').value = '';
@@ -3537,7 +3664,7 @@ function openAddShopItem() {
   document.getElementById('shopQty').value = '1';
   document.getElementById('shopQtyOther').value = '1';
   document.getElementById('shopNotes').value = '';
-  setVinylPhotoPreview(null);
+  _resetVinylCoverUI();
   const defaultPerson = (currentShopPerson !== '全部') ? currentShopPerson : (state.shopPeople[0] || '我');
   currentShopItemPerson = defaultPerson;
   renderShopPersonBtns(defaultPerson);
@@ -3549,8 +3676,6 @@ async function editShopItem(id) {
   const item = (state.shoppingList || []).find(i => i.id === id);
   if (!item) return;
   editingShopId = id;
-  vinylPhotoChanged = false;
-  vinylPhotoData = null;
   document.getElementById('shopItemModalTitle').textContent = '編輯項目';
   document.getElementById('shopDeleteBtn').style.display = '';
   document.getElementById('shopName').value = item.name || '';
@@ -3563,16 +3688,19 @@ async function editShopItem(id) {
   currentShopItemPerson = person;
   renderShopPersonBtns(person);
   setShopCat(item.cat || '美妝');
-  // 若有封面圖片，先開 modal 再非同步載入（避免卡住）
+  _resetVinylCoverUI();
   openModal('shopItemModal');
-  if (item.hasPhoto) {
-    try {
-      const img = await getVinylImage(id);
-      vinylPhotoData = img || null;
-      setVinylPhotoPreview(vinylPhotoData);
-    } catch(e) { setVinylPhotoPreview(null); }
-  } else {
-    setVinylPhotoPreview(null);
+  // 載入既有封面
+  if (item.cat === '黑膠') {
+    if (item.coverUrl) {
+      vinylCoverUrl = item.coverUrl;
+      showVinylCover(item.coverUrl, item.name || '', item.artist || '');
+    } else if (item.hasPhoto) {
+      try {
+        const img = await getVinylImage(id);
+        if (img) { vinylPhotoData = img; showVinylCover(img, '手動上傳', ''); }
+      } catch(e) {}
+    }
   }
 }
 
@@ -3609,20 +3737,29 @@ async function saveShopItem() {
   const person = currentShopItemPerson || (state.shopPeople[0] || '我');
   const itemId = editingShopId || ('shop-' + Date.now());
 
-  // 處理圖片儲存
+  // 取封面來源 & 讀藝人名（從封面列）
+  const coverUrl = isVinyl ? (vinylCoverUrl || undefined) : undefined;
+  const artist = isVinyl ? (document.getElementById('vinylCoverArtist').textContent || undefined) : undefined;
+
+  // 手動上傳圖片處理（只有 vinylPhotoData 且沒有 coverUrl 才存）
   let hasPhoto = false;
-  if (isVinyl && vinylPhotoChanged) {
-    if (vinylPhotoData) {
-      await saveVinylImage(itemId, vinylPhotoData);
-      hasPhoto = true;
+  if (isVinyl && !coverUrl) {
+    if (vinylPhotoChanged) {
+      if (vinylPhotoData) {
+        await saveVinylImage(itemId, vinylPhotoData);
+        hasPhoto = true;
+      } else {
+        await deleteVinylImage(itemId);
+        hasPhoto = false;
+      }
     } else {
-      await deleteVinylImage(itemId);
-      hasPhoto = false;
+      const existing = (state.shoppingList || []).find(i => i.id === itemId);
+      hasPhoto = existing ? (existing.hasPhoto || false) : false;
     }
-  } else if (isVinyl && !vinylPhotoChanged) {
-    // 沒有改圖片：保留原有的 hasPhoto
-    const existing = (state.shoppingList || []).find(i => i.id === itemId);
-    hasPhoto = existing ? (existing.hasPhoto || false) : false;
+  } else if (isVinyl && coverUrl) {
+    // 用 iTunes 封面時清掉本地圖
+    try { await deleteVinylImage(itemId); } catch(e) {}
+    hasPhoto = false;
   }
 
   if (editingShopId) {
@@ -3630,14 +3767,18 @@ async function saveShopItem() {
     if (idx >= 0) {
       const old = state.shoppingList[idx];
       state.shoppingList[idx] = {
-        id: old.id, checked: old.checked, cat, person, hasPhoto: isVinyl ? hasPhoto : undefined,
+        id: old.id, checked: old.checked, cat, person,
+        coverUrl, artist,
+        hasPhoto: isVinyl ? hasPhoto : undefined,
         name, recordName: isVinyl ? recordName : undefined,
         upc: isVinyl ? upc : undefined, qty, notes
       };
     }
   } else {
     state.shoppingList.push({
-      id: itemId, cat, person, hasPhoto: isVinyl ? hasPhoto : undefined,
+      id: itemId, cat, person,
+      coverUrl, artist,
+      hasPhoto: isVinyl ? hasPhoto : undefined,
       name, recordName: isVinyl ? recordName : undefined,
       upc: isVinyl ? upc : undefined,
       qty, notes, checked: false
