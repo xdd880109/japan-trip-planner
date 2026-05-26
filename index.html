@@ -3379,6 +3379,27 @@ function resizeImageFile(file, maxPx = 600) {
   });
 }
 
+// 黑膠封面專用：置中裁切成正方形後縮到指定尺寸
+function cropSquareAndResize(file, size = 250) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const shorter = Math.min(img.width, img.height);
+        const sx = (img.width  - shorter) / 2;
+        const sy = (img.height - shorter) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        canvas.getContext('2d').drawImage(img, sx, sy, shorter, shorter, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ── iTunes 搜尋 ──
 let _vinylSearchTimer = null;
 function onVinylSearch(input) {
@@ -3458,12 +3479,12 @@ function clearVinylCover() {
   if (hint) hint.style.display = 'flex';
 }
 
-// ── 手動上傳封面（縮 250px 存 state，可同步）──
+// ── 手動上傳封面（自動置中裁正方形 + 縮 250px，存 state 同步）──
 async function handleVinylPhoto(input) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  const dataUrl = await resizeImageFile(file, 250);  // 小圖才能放進 state 同步
+  const dataUrl = await cropSquareAndResize(file, 250);
   vinylPhotoData = dataUrl;
   vinylPhotoChanged = true;
   vinylCoverUrl = null;
