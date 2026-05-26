@@ -1374,6 +1374,72 @@
     border-color: var(--red);
     color: #fff;
   }
+  /* Vinyl photo upload */
+  .vinyl-photo-area {
+    width: 100%;
+    height: 130px;
+    border: 2px dashed var(--gray-border);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    background: var(--gray-bg);
+    position: relative;
+    transition: border-color .2s;
+  }
+  .vinyl-photo-area:active { border-color: var(--red); }
+  .vinyl-photo-area img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .vinyl-photo-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    color: var(--gray-text);
+    font-size: 13px;
+    pointer-events: none;
+  }
+  .vinyl-photo-placeholder-icon { font-size: 32px; }
+  .vinyl-photo-remove {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    background: rgba(0,0,0,.55);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  .vinyl-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--gray-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+  .vinyl-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   .shop-fab {
     position: fixed;
     bottom: calc(var(--nav-height) + 16px);
@@ -1837,6 +1903,18 @@
       <!-- 黑膠專用欄位 -->
       <div id="shopVinylFields" style="display:none">
         <div class="form-group">
+          <label class="form-label">專輯封面</label>
+          <div class="vinyl-photo-area" id="vinylPhotoArea" onclick="document.getElementById('vinylPhotoInput').click()">
+            <input type="file" id="vinylPhotoInput" accept="image/*" style="display:none" onchange="handleVinylPhoto(this)">
+            <div id="vinylPhotoPreview">
+              <div class="vinyl-photo-placeholder">
+                <span class="vinyl-photo-placeholder-icon">📷</span>
+                <span>點擊上傳 / 拍照</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
           <label class="form-label">唱片名稱</label>
           <input type="text" class="form-input" id="shopRecordName" placeholder="Album / Artist">
         </div>
@@ -1980,6 +2058,8 @@ let currentShopPerson = '全部';
 let editingShopId = null;
 let currentShopItemCat = '美妝';
 let currentShopItemPerson = '我';
+let vinylPhotoData = null;    // 目前 modal 中的圖片 data URL（null = 無）
+let vinylPhotoChanged = false; // 是否有改動（用於存檔判斷）
 
 // Calendar state
 let calYear, calMonth;
@@ -3195,6 +3275,102 @@ function deleteTransit() {
   showToast('已刪除交通');
 }
 
+// ===== VINYL IMAGE (IndexedDB) =====
+function openImageDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('vinylImages', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('imgs');
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = rej;
+  });
+}
+async function saveVinylImage(id, dataUrl) {
+  const db = await openImageDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('imgs', 'readwrite');
+    tx.objectStore('imgs').put(dataUrl, id);
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+}
+async function getVinylImage(id) {
+  const db = await openImageDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('imgs', 'readonly');
+    const req = tx.objectStore('imgs').get(id);
+    req.onsuccess = e => res(e.target.result || null);
+    req.onerror = rej;
+  });
+}
+async function deleteVinylImage(id) {
+  const db = await openImageDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('imgs', 'readwrite');
+    tx.objectStore('imgs').delete(id);
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+}
+
+function resizeImageFile(file, maxPx = 600) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleVinylPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const dataUrl = await resizeImageFile(file);
+  vinylPhotoData = dataUrl;
+  vinylPhotoChanged = true;
+  setVinylPhotoPreview(dataUrl);
+}
+
+function setVinylPhotoPreview(dataUrl) {
+  const preview = document.getElementById('vinylPhotoPreview');
+  if (!preview) return;
+  if (dataUrl) {
+    preview.innerHTML = `
+      <img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;display:block;">
+      <button class="vinyl-photo-remove" onclick="event.stopPropagation();removeVinylPhoto()">✕</button>`;
+  } else {
+    preview.innerHTML = `<div class="vinyl-photo-placeholder">
+      <span class="vinyl-photo-placeholder-icon">📷</span>
+      <span>點擊上傳 / 拍照</span></div>`;
+  }
+}
+
+function removeVinylPhoto() {
+  vinylPhotoData = null;
+  vinylPhotoChanged = true;
+  setVinylPhotoPreview(null);
+}
+
+async function loadVinylThumbs() {
+  const els = document.querySelectorAll('[data-vinyl-id]');
+  for (const el of els) {
+    const id = el.dataset.vinylId;
+    try {
+      const img = await getVinylImage(id);
+      if (img) el.innerHTML = `<img src="${img}">`;
+    } catch(e) {}
+  }
+}
+
 // ===== SHOPPING LIST =====
 const SHOP_CAT_ICONS = { '全部':'📋', '美妝':'💄', '食物':'🍡', '黑膠':'🎵', '雜貨':'🛍️' };
 const SHOP_CAT_ORDER = ['美妝', '食物', '黑膠', '雜貨'];
@@ -3266,6 +3442,8 @@ function renderShoppingView() {
     filtered.forEach(item => { html += buildShopItemHtml(item, showPersonBadge); });
   }
   listEl.innerHTML = html;
+  // 非同步載入黑膠封面縮圖
+  loadVinylThumbs();
 }
 
 function buildShopItemHtml(item, showPersonBadge) {
@@ -3279,6 +3457,10 @@ function buildShopItemHtml(item, showPersonBadge) {
   if (item.notes) parts.push(item.notes);
   const meta = parts.join(' · ');
   const personBadge = showPersonBadge ? `<span class="shop-person-badge">${escHtml(item.person || '我')}</span>` : '';
+  // 黑膠縮圖：初始顯示 🎵，之後 loadVinylThumbs() 非同步替換成真實圖片
+  const vinylThumb = isVinyl
+    ? `<div class="vinyl-thumb" ${item.hasPhoto ? `data-vinyl-id="${item.id}"` : ''}>🎵</div>`
+    : '';
 
   return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
     <div class="shop-checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
@@ -3287,7 +3469,7 @@ function buildShopItemHtml(item, showPersonBadge) {
       ${meta ? `<div class="shop-item-meta">${escHtml(meta)}</div>` : ''}
     </div>
     ${personBadge}
-    ${isVinyl && !showPersonBadge ? '<span class="shop-vinyl-badge">🎵</span>' : ''}
+    ${vinylThumb}
   </div>`;
 }
 
@@ -3345,6 +3527,8 @@ function setShopPersonModal(person) {
 
 function openAddShopItem() {
   editingShopId = null;
+  vinylPhotoData = null;
+  vinylPhotoChanged = false;
   document.getElementById('shopItemModalTitle').textContent = '新增項目';
   document.getElementById('shopDeleteBtn').style.display = 'none';
   document.getElementById('shopName').value = '';
@@ -3353,7 +3537,7 @@ function openAddShopItem() {
   document.getElementById('shopQty').value = '1';
   document.getElementById('shopQtyOther').value = '1';
   document.getElementById('shopNotes').value = '';
-  // 預設選目前篩選的人（若有），否則選「我」
+  setVinylPhotoPreview(null);
   const defaultPerson = (currentShopPerson !== '全部') ? currentShopPerson : (state.shopPeople[0] || '我');
   currentShopItemPerson = defaultPerson;
   renderShopPersonBtns(defaultPerson);
@@ -3361,10 +3545,12 @@ function openAddShopItem() {
   openModal('shopItemModal');
 }
 
-function editShopItem(id) {
+async function editShopItem(id) {
   const item = (state.shoppingList || []).find(i => i.id === id);
   if (!item) return;
   editingShopId = id;
+  vinylPhotoChanged = false;
+  vinylPhotoData = null;
   document.getElementById('shopItemModalTitle').textContent = '編輯項目';
   document.getElementById('shopDeleteBtn').style.display = '';
   document.getElementById('shopName').value = item.name || '';
@@ -3377,7 +3563,17 @@ function editShopItem(id) {
   currentShopItemPerson = person;
   renderShopPersonBtns(person);
   setShopCat(item.cat || '美妝');
+  // 若有封面圖片，先開 modal 再非同步載入（避免卡住）
   openModal('shopItemModal');
+  if (item.hasPhoto) {
+    try {
+      const img = await getVinylImage(id);
+      vinylPhotoData = img || null;
+      setVinylPhotoPreview(vinylPhotoData);
+    } catch(e) { setVinylPhotoPreview(null); }
+  } else {
+    setVinylPhotoPreview(null);
+  }
 }
 
 function setShopCat(cat) {
@@ -3391,7 +3587,7 @@ function setShopCat(cat) {
   document.getElementById('shopNameGroup').style.display = isVinyl ? 'none' : '';
 }
 
-function saveShopItem() {
+async function saveShopItem() {
   const cat = currentShopItemCat;
   const isVinyl = cat === '黑膠';
   let name, recordName, upc, qty, notes;
@@ -3411,22 +3607,38 @@ function saveShopItem() {
   if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
 
   const person = currentShopItemPerson || (state.shopPeople[0] || '我');
+  const itemId = editingShopId || ('shop-' + Date.now());
+
+  // 處理圖片儲存
+  let hasPhoto = false;
+  if (isVinyl && vinylPhotoChanged) {
+    if (vinylPhotoData) {
+      await saveVinylImage(itemId, vinylPhotoData);
+      hasPhoto = true;
+    } else {
+      await deleteVinylImage(itemId);
+      hasPhoto = false;
+    }
+  } else if (isVinyl && !vinylPhotoChanged) {
+    // 沒有改圖片：保留原有的 hasPhoto
+    const existing = (state.shoppingList || []).find(i => i.id === itemId);
+    hasPhoto = existing ? (existing.hasPhoto || false) : false;
+  }
 
   if (editingShopId) {
     const idx = state.shoppingList.findIndex(i => i.id === editingShopId);
     if (idx >= 0) {
       const old = state.shoppingList[idx];
       state.shoppingList[idx] = {
-        id: old.id, checked: old.checked, cat, person,
+        id: old.id, checked: old.checked, cat, person, hasPhoto: isVinyl ? hasPhoto : undefined,
         name, recordName: isVinyl ? recordName : undefined,
         upc: isVinyl ? upc : undefined, qty, notes
       };
     }
   } else {
     state.shoppingList.push({
-      id: 'shop-' + Date.now(),
-      cat, person, name,
-      recordName: isVinyl ? recordName : undefined,
+      id: itemId, cat, person, hasPhoto: isVinyl ? hasPhoto : undefined,
+      name, recordName: isVinyl ? recordName : undefined,
       upc: isVinyl ? upc : undefined,
       qty, notes, checked: false
     });
@@ -3438,9 +3650,13 @@ function saveShopItem() {
   showToast(editingShopId ? '已更新' : '已新增');
 }
 
-function deleteShopItem() {
+async function deleteShopItem() {
   if (!editingShopId) return;
   if (!confirm('確定要刪除這個項目嗎？')) return;
+  const item = (state.shoppingList || []).find(i => i.id === editingShopId);
+  if (item && item.hasPhoto) {
+    try { await deleteVinylImage(editingShopId); } catch(e) {}
+  }
   state.shoppingList = (state.shoppingList || []).filter(i => i.id !== editingShopId);
   saveState();
   closeModal('shopItemModal');
