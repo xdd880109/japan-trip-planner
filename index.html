@@ -1952,10 +1952,11 @@
           </div>
           <button class="vinyl-cover-clear" onclick="clearVinylCover()">✕</button>
         </div>
-        <!-- 找不到時手動上傳 -->
+        <!-- 找不到時手動上傳 / 貼上 -->
         <div class="vinyl-upload-hint" id="vinylUploadHint">
           <span>找不到？</span>
-          <button onclick="document.getElementById('vinylPhotoInput').click()">📷 手動上傳封面</button>
+          <button onclick="document.getElementById('vinylPhotoInput').click()">📷 上傳 / 拍照</button>
+          <button onclick="pasteVinylPhoto()">📋 貼上圖片</button>
           <input type="file" id="vinylPhotoInput" accept="image/*" style="display:none" onchange="handleVinylPhoto(this)">
         </div>
         <!-- 唱片名稱 -->
@@ -3479,17 +3480,59 @@ function clearVinylCover() {
   if (hint) hint.style.display = 'flex';
 }
 
-// ── 手動上傳封面（自動置中裁正方形 + 縮 250px，存 state 同步）──
-async function handleVinylPhoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  input.value = '';
+// ── 共用：處理任意圖片 File/Blob → 裁方 → 顯示 ──
+async function processVinylPhoto(file) {
   const dataUrl = await cropSquareAndResize(file, 250);
   vinylPhotoData = dataUrl;
   vinylPhotoChanged = true;
   vinylCoverUrl = null;
   showVinylCover(dataUrl, '手動上傳', '');
+  showToast('封面已套用 ✓');
 }
+
+// 從 file input 觸發
+async function handleVinylPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  await processVinylPhoto(file);
+}
+
+// 📋 貼上按鈕（使用 Clipboard API）
+async function pasteVinylPhoto() {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          await processVinylPhoto(blob);
+          return;
+        }
+      }
+    }
+    showToast('剪貼簿沒有圖片，請先複製圖片');
+  } catch(e) {
+    // Clipboard API 被拒絕或不支援時，改用鍵盤提示
+    showToast('請直接按 Ctrl+V / ⌘V 貼上');
+  }
+}
+
+// Ctrl+V / ⌘V 全域監聽（modal 開啟且是黑膠時才作用）
+document.addEventListener('paste', async (e) => {
+  if (!document.getElementById('shopItemModal')?.classList.contains('active')) return;
+  if (currentShopItemCat !== '黑膠') return;
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) await processVinylPhoto(file);
+      break;
+    }
+  }
+});
 
 async function loadVinylThumbs() {
   const els = document.querySelectorAll('[data-vinyl-id]');
