@@ -3458,12 +3458,12 @@ function clearVinylCover() {
   if (hint) hint.style.display = 'flex';
 }
 
-// ── 手動上傳封面（搜尋找不到時備用）──
+// ── 手動上傳封面（縮 250px 存 state，可同步）──
 async function handleVinylPhoto(input) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  const dataUrl = await resizeImageFile(file);
+  const dataUrl = await resizeImageFile(file, 250);  // 小圖才能放進 state 同步
   vinylPhotoData = dataUrl;
   vinylPhotoChanged = true;
   vinylCoverUrl = null;
@@ -3568,12 +3568,15 @@ function buildShopItemHtml(item, showPersonBadge) {
   const meta = parts.join(' · ');
   const personBadge = showPersonBadge ? `<span class="shop-person-badge">${escHtml(item.person || '我')}</span>` : '';
 
-  // 黑膠縮圖：coverUrl（iTunes）優先，其次 hasPhoto（本地）
+  // 黑膠縮圖：coverUrl（iTunes）→ localPhotoData（手動同步）→ hasPhoto（舊版）→ 🎵
   let vinylThumb = '';
   if (isVinyl) {
     if (item.coverUrl) {
       vinylThumb = `<div class="vinyl-thumb"><img src="${escHtml(item.coverUrl)}" loading="lazy"></div>`;
+    } else if (item.localPhotoData) {
+      vinylThumb = `<div class="vinyl-thumb"><img src="${item.localPhotoData}" loading="lazy"></div>`;
     } else if (item.hasPhoto) {
+      // 舊版 IndexedDB 相容
       vinylThumb = `<div class="vinyl-thumb" data-vinyl-id="${item.id}">🎵</div>`;
     } else {
       vinylThumb = `<div class="vinyl-thumb">🎵</div>`;
@@ -3690,12 +3693,16 @@ async function editShopItem(id) {
   setShopCat(item.cat || '美妝');
   _resetVinylCoverUI();
   openModal('shopItemModal');
-  // 載入既有封面
+  // 載入既有封面（coverUrl = iTunes；localPhotoData = 手動上傳同步版；hasPhoto = 舊版 IndexedDB）
   if (item.cat === '黑膠') {
     if (item.coverUrl) {
       vinylCoverUrl = item.coverUrl;
       showVinylCover(item.coverUrl, item.name || '', item.artist || '');
+    } else if (item.localPhotoData) {
+      vinylPhotoData = item.localPhotoData;
+      showVinylCover(item.localPhotoData, '手動上傳', '');
     } else if (item.hasPhoto) {
+      // 舊版相容：從 IndexedDB 讀取
       try {
         const img = await getVinylImage(id);
         if (img) { vinylPhotoData = img; showVinylCover(img, '手動上傳', ''); }
@@ -3737,29 +3744,20 @@ async function saveShopItem() {
   const person = currentShopItemPerson || (state.shopPeople[0] || '我');
   const itemId = editingShopId || ('shop-' + Date.now());
 
-  // 取封面來源 & 讀藝人名（從封面列）
+  // 封面來源：iTunes URL 優先，其次手動上傳的 base64（存進 state 一起同步）
   const coverUrl = isVinyl ? (vinylCoverUrl || undefined) : undefined;
   const artist = isVinyl ? (document.getElementById('vinylCoverArtist').textContent || undefined) : undefined;
 
-  // 手動上傳圖片處理（只有 vinylPhotoData 且沒有 coverUrl 才存）
-  let hasPhoto = false;
+  // localPhotoData：只在沒有 coverUrl 時保留手動上傳的圖
+  let localPhotoData;
   if (isVinyl && !coverUrl) {
     if (vinylPhotoChanged) {
-      if (vinylPhotoData) {
-        await saveVinylImage(itemId, vinylPhotoData);
-        hasPhoto = true;
-      } else {
-        await deleteVinylImage(itemId);
-        hasPhoto = false;
-      }
+      localPhotoData = vinylPhotoData || undefined; // null → undefined（從 state 移除）
     } else {
+      // 沒有改：保留舊的
       const existing = (state.shoppingList || []).find(i => i.id === itemId);
-      hasPhoto = existing ? (existing.hasPhoto || false) : false;
+      localPhotoData = existing ? existing.localPhotoData : undefined;
     }
-  } else if (isVinyl && coverUrl) {
-    // 用 iTunes 封面時清掉本地圖
-    try { await deleteVinylImage(itemId); } catch(e) {}
-    hasPhoto = false;
   }
 
   if (editingShopId) {
@@ -3768,8 +3766,7 @@ async function saveShopItem() {
       const old = state.shoppingList[idx];
       state.shoppingList[idx] = {
         id: old.id, checked: old.checked, cat, person,
-        coverUrl, artist,
-        hasPhoto: isVinyl ? hasPhoto : undefined,
+        coverUrl, artist, localPhotoData,
         name, recordName: isVinyl ? recordName : undefined,
         upc: isVinyl ? upc : undefined, qty, notes
       };
@@ -3777,8 +3774,7 @@ async function saveShopItem() {
   } else {
     state.shoppingList.push({
       id: itemId, cat, person,
-      coverUrl, artist,
-      hasPhoto: isVinyl ? hasPhoto : undefined,
+      coverUrl, artist, localPhotoData,
       name, recordName: isVinyl ? recordName : undefined,
       upc: isVinyl ? upc : undefined,
       qty, notes, checked: false
