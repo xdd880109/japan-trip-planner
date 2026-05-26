@@ -1290,6 +1290,68 @@
     font-size: 13px;
     color: var(--gray-text);
   }
+  /* People filter row */
+  .shopping-people {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .shopping-people::-webkit-scrollbar { display: none; }
+  .shop-person-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 13px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gray-border);
+    background: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .2s;
+  }
+  .shop-person-chip.active {
+    background: #1a73e8;
+    border-color: #1a73e8;
+    color: #fff;
+  }
+  .shop-person-chip .chip-x {
+    font-size: 12px;
+    opacity: .65;
+    line-height: 1;
+    margin-left: 1px;
+    cursor: pointer;
+  }
+  .shop-person-chip.active .chip-x { opacity: .85; }
+  .shop-add-person-btn {
+    flex-shrink: 0;
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1.5px dashed var(--gray-border);
+    background: transparent;
+    font-size: 13px;
+    color: var(--gray-text);
+    cursor: pointer;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .shop-person-badge {
+    font-size: 11px;
+    background: #e8f0fe;
+    color: #1a73e8;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
   /* Shopping modal category buttons */
   .shop-cat-btns {
     display: flex;
@@ -1458,6 +1520,7 @@
   <div id="shoppingView" class="view">
     <div class="shopping-header">
       <div class="shopping-title">購買清單</div>
+      <div class="shopping-people" id="shoppingPeopleTabs"></div>
       <div class="shopping-cats" id="shoppingCatTabs"></div>
     </div>
     <div class="shopping-progress" id="shoppingProgress"></div>
@@ -1753,6 +1816,12 @@
     </div>
     <div class="modal-body">
       <div class="form-group">
+        <label class="form-label">誰的清單</label>
+        <div class="shop-cat-btns" id="shopPersonBtns">
+          <!-- 動態產生 -->
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">分類</label>
         <div class="shop-cat-btns" id="shopCatBtns">
           <button class="shop-cat-btn active" data-cat="美妝" onclick="setShopCat('美妝')">💄 美妝</button>
@@ -1891,7 +1960,8 @@ let state = {
   endDate: '',
   numPeople: 1,
   days: [],
-  shoppingList: []
+  shoppingList: [],
+  shopPeople: ['我']
 };
 
 let currentView = 'home';
@@ -1906,8 +1976,10 @@ let sidebarCategory = '全部';
 
 // Shopping list state
 let currentShopCat = '全部';
+let currentShopPerson = '全部';
 let editingShopId = null;
 let currentShopItemCat = '美妝';
+let currentShopItemPerson = '我';
 
 // Calendar state
 let calYear, calMonth;
@@ -2118,6 +2190,7 @@ function loadState() {
     const s = localStorage.getItem('japanTrip');
     if (s) state = { ...state, ...JSON.parse(s) };
     if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
+    if (!Array.isArray(state.shopPeople) || state.shopPeople.length === 0) state.shopPeople = ['我'];
     renumberDays(); // 修正舊資料的天數編號
   } catch(e) {}
 }
@@ -3128,21 +3201,40 @@ const SHOP_CAT_ORDER = ['美妝', '食物', '黑膠', '雜貨'];
 
 function renderShoppingView() {
   if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
+  if (!Array.isArray(state.shopPeople) || state.shopPeople.length === 0) state.shopPeople = ['我'];
 
-  // Category filter tabs
+  // 確保 currentShopPerson 仍然有效
+  if (currentShopPerson !== '全部' && !state.shopPeople.includes(currentShopPerson)) {
+    currentShopPerson = '全部';
+  }
+
+  // ── 人員篩選列 ──
+  const peopleTabs = document.getElementById('shoppingPeopleTabs');
+  if (peopleTabs) {
+    const allChip = `<button class="shop-person-chip ${currentShopPerson === '全部' ? 'active' : ''}" onclick="setShopPersonFilter('全部')">👥 全部</button>`;
+    const personChips = state.shopPeople.map(p =>
+      `<button class="shop-person-chip ${currentShopPerson === p ? 'active' : ''}" onclick="setShopPersonFilter('${escHtml(p)}')">${escHtml(p)}<span class="chip-x" onclick="event.stopPropagation();removeShopPerson('${escHtml(p)}')">✕</span></button>`
+    ).join('');
+    const addChip = `<button class="shop-add-person-btn" onclick="addShopPerson()">＋ 新增成員</button>`;
+    peopleTabs.innerHTML = allChip + personChips + addChip;
+  }
+
+  // ── 分類篩選列 ──
   const catTabs = document.getElementById('shoppingCatTabs');
   if (!catTabs) return;
   catTabs.innerHTML = ['全部', ...SHOP_CAT_ORDER].map(c =>
     `<button class="shop-filter-btn ${currentShopCat === c ? 'active' : ''}" onclick="setShopFilterCat('${c}')">${SHOP_CAT_ICONS[c]} ${c}</button>`
   ).join('');
 
-  // Filtered items
+  // ── 篩選項目（同時套用人員 + 分類）──
   const list = state.shoppingList;
-  const filtered = currentShopCat === '全部' ? list : list.filter(i => i.cat === currentShopCat);
+  let filtered = currentShopPerson === '全部' ? list : list.filter(i => (i.person || '我') === currentShopPerson);
+  if (currentShopCat !== '全部') filtered = filtered.filter(i => i.cat === currentShopCat);
+
   const checked = filtered.filter(i => i.checked).length;
   const total = filtered.length;
 
-  // Progress bar
+  // ── 進度條 ──
   const progressEl = document.getElementById('shoppingProgress');
   if (total > 0) {
     progressEl.innerHTML = `
@@ -3152,28 +3244,31 @@ function renderShoppingView() {
     progressEl.innerHTML = '';
   }
 
-  // Item list
+  // ── 清單項目 ──
   const listEl = document.getElementById('shoppingList');
   if (filtered.length === 0) {
-    listEl.innerHTML = `<div class="shop-empty">還沒有項目<br><span>點右下角 ＋ 新增</span></div>`;
+    const hint = currentShopPerson !== '全部' ? `${currentShopPerson} 還沒有項目` : '還沒有項目';
+    listEl.innerHTML = `<div class="shop-empty">${hint}<br><span>點右下角 ＋ 新增</span></div>`;
     return;
   }
 
+  // 以分類分組顯示
+  const showPersonBadge = currentShopPerson === '全部' && state.shopPeople.length > 1;
   let html = '';
   if (currentShopCat === '全部') {
     SHOP_CAT_ORDER.forEach(cat => {
-      const catItems = list.filter(i => i.cat === cat);
+      const catItems = filtered.filter(i => i.cat === cat);
       if (catItems.length === 0) return;
       html += `<div class="shop-group-header">${SHOP_CAT_ICONS[cat]} ${cat}</div>`;
-      catItems.forEach(item => { html += buildShopItemHtml(item); });
+      catItems.forEach(item => { html += buildShopItemHtml(item, showPersonBadge); });
     });
   } else {
-    filtered.forEach(item => { html += buildShopItemHtml(item); });
+    filtered.forEach(item => { html += buildShopItemHtml(item, showPersonBadge); });
   }
   listEl.innerHTML = html;
 }
 
-function buildShopItemHtml(item) {
+function buildShopItemHtml(item, showPersonBadge) {
   const isVinyl = item.cat === '黑膠';
   const parts = [];
   if (isVinyl) {
@@ -3183,6 +3278,7 @@ function buildShopItemHtml(item) {
   if (item.qty > 1) parts.push('×' + item.qty);
   if (item.notes) parts.push(item.notes);
   const meta = parts.join(' · ');
+  const personBadge = showPersonBadge ? `<span class="shop-person-badge">${escHtml(item.person || '我')}</span>` : '';
 
   return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
     <div class="shop-checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
@@ -3190,7 +3286,8 @@ function buildShopItemHtml(item) {
       <div class="shop-item-name">${escHtml(item.name || '（未命名）')}</div>
       ${meta ? `<div class="shop-item-meta">${escHtml(meta)}</div>` : ''}
     </div>
-    ${isVinyl ? '<span class="shop-vinyl-badge">🎵</span>' : ''}
+    ${personBadge}
+    ${isVinyl && !showPersonBadge ? '<span class="shop-vinyl-badge">🎵</span>' : ''}
   </div>`;
 }
 
@@ -3198,9 +3295,52 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── 篩選切換 ──
 function setShopFilterCat(cat) {
   currentShopCat = cat;
   renderShoppingView();
+}
+function setShopPersonFilter(person) {
+  currentShopPerson = person;
+  renderShoppingView();
+}
+
+// ── 人員管理 ──
+function addShopPerson() {
+  const name = prompt('新成員名稱：');
+  if (!name || !name.trim()) return;
+  const n = name.trim();
+  if (state.shopPeople.includes(n)) { showToast('已有這個成員'); return; }
+  state.shopPeople.push(n);
+  saveState();
+  renderShoppingView();
+}
+function removeShopPerson(person) {
+  if (!confirm(`刪除「${person}」嗎？\n（該成員的項目不會刪除，但會變成「我」的清單）`)) return;
+  // 把該人員的項目改歸到「我」
+  (state.shoppingList || []).forEach(item => {
+    if ((item.person || '我') === person) item.person = '我';
+  });
+  state.shopPeople = state.shopPeople.filter(p => p !== person);
+  if (state.shopPeople.length === 0) state.shopPeople = ['我'];
+  if (currentShopPerson === person) currentShopPerson = '全部';
+  saveState();
+  renderShoppingView();
+}
+
+// ── Modal：開啟 / 編輯 ──
+function renderShopPersonBtns(selected) {
+  const btns = document.getElementById('shopPersonBtns');
+  if (!btns) return;
+  btns.innerHTML = (state.shopPeople || ['我']).map(p =>
+    `<button class="shop-cat-btn ${selected === p ? 'active' : ''}" data-person="${escHtml(p)}" onclick="setShopPersonModal('${escHtml(p)}')">${escHtml(p)}</button>`
+  ).join('');
+}
+function setShopPersonModal(person) {
+  currentShopItemPerson = person;
+  document.querySelectorAll('#shopPersonBtns .shop-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.person === person);
+  });
 }
 
 function openAddShopItem() {
@@ -3213,6 +3353,10 @@ function openAddShopItem() {
   document.getElementById('shopQty').value = '1';
   document.getElementById('shopQtyOther').value = '1';
   document.getElementById('shopNotes').value = '';
+  // 預設選目前篩選的人（若有），否則選「我」
+  const defaultPerson = (currentShopPerson !== '全部') ? currentShopPerson : (state.shopPeople[0] || '我');
+  currentShopItemPerson = defaultPerson;
+  renderShopPersonBtns(defaultPerson);
   setShopCat('美妝');
   openModal('shopItemModal');
 }
@@ -3229,6 +3373,9 @@ function editShopItem(id) {
   document.getElementById('shopQty').value = item.qty || 1;
   document.getElementById('shopQtyOther').value = item.qty || 1;
   document.getElementById('shopNotes').value = item.notes || '';
+  const person = item.person || '我';
+  currentShopItemPerson = person;
+  renderShopPersonBtns(person);
   setShopCat(item.cat || '美妝');
   openModal('shopItemModal');
 }
@@ -3263,12 +3410,14 @@ function saveShopItem() {
   if (!name) { showToast('請輸入名稱'); return; }
   if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
 
+  const person = currentShopItemPerson || (state.shopPeople[0] || '我');
+
   if (editingShopId) {
     const idx = state.shoppingList.findIndex(i => i.id === editingShopId);
     if (idx >= 0) {
       const old = state.shoppingList[idx];
       state.shoppingList[idx] = {
-        id: old.id, checked: old.checked, cat,
+        id: old.id, checked: old.checked, cat, person,
         name, recordName: isVinyl ? recordName : undefined,
         upc: isVinyl ? upc : undefined, qty, notes
       };
@@ -3276,7 +3425,7 @@ function saveShopItem() {
   } else {
     state.shoppingList.push({
       id: 'shop-' + Date.now(),
-      cat, name,
+      cat, person, name,
       recordName: isVinyl ? recordName : undefined,
       upc: isVinyl ? upc : undefined,
       qty, notes, checked: false
