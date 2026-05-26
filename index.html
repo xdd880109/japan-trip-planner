@@ -1139,6 +1139,200 @@
   .transit-type-btn .tt-name { font-size: 10px; font-weight: 600; color: var(--text-sub); }
   .transit-type-btn.active .tt-name { color: var(--red); }
 
+  /* ===== SHOPPING LIST ===== */
+  .shopping-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--white);
+    padding: 16px 16px 0;
+    border-bottom: 1px solid var(--gray-border);
+  }
+  .shopping-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  .shopping-cats {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .shopping-cats::-webkit-scrollbar { display: none; }
+  .shop-filter-btn {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gray-border);
+    background: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .2s;
+  }
+  .shop-filter-btn.active {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+  }
+  .shopping-progress {
+    padding: 10px 16px 0;
+  }
+  .progress-text {
+    font-size: 12px;
+    color: var(--gray-text);
+    margin-bottom: 5px;
+    font-weight: 600;
+  }
+  .progress-bar-track {
+    height: 5px;
+    background: var(--gray-border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+    transition: width .4s;
+  }
+  .shopping-list {
+    padding: 8px 12px 16px;
+  }
+  .shop-group-header {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-text);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding: 12px 4px 6px;
+  }
+  .shop-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--white);
+    border: 1.5px solid var(--gray-border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: opacity .2s, background .2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .shop-item.checked {
+    opacity: .55;
+    background: var(--gray-bg);
+  }
+  .shop-checkbox {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--gray-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: #fff;
+    font-weight: 700;
+    transition: all .2s;
+    cursor: pointer;
+  }
+  .shop-checkbox.checked {
+    background: var(--green);
+    border-color: var(--green);
+  }
+  .shop-item-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .shop-item-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .shop-item.checked .shop-item-name {
+    text-decoration: line-through;
+    color: var(--gray-text);
+  }
+  .shop-item-meta {
+    font-size: 12px;
+    color: var(--text-sub);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .shop-vinyl-badge {
+    font-size: 16px;
+    flex-shrink: 0;
+    opacity: .7;
+  }
+  .shop-empty {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--gray-text);
+    font-size: 15px;
+    line-height: 2;
+  }
+  .shop-empty span {
+    font-size: 13px;
+    color: var(--gray-text);
+  }
+  /* Shopping modal category buttons */
+  .shop-cat-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .shop-cat-btn {
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--gray-border);
+    background: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .shop-cat-btn.active {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+  }
+  .shop-fab {
+    position: fixed;
+    bottom: calc(var(--nav-height) + 16px);
+    right: 20px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--red);
+    color: #fff;
+    font-size: 28px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    z-index: 50;
+    border: none;
+    font-weight: 300;
+    line-height: 1;
+  }
+
   /* ===== TOAST ===== */
   .toast {
     position: fixed;
@@ -1229,6 +1423,9 @@
     <button class="fab" id="fabBtn" onclick="openAddPlace()">＋</button>
   </div>
 
+  <!-- SHOPPING FAB -->
+  <button class="shop-fab" id="shopFabBtn" onclick="openAddShopItem()">＋</button>
+
   <!-- BUDGET VIEW -->
   <div id="budgetView" class="view">
     <div class="budget-hero">
@@ -1257,6 +1454,16 @@
   </div>
 
   <!-- BOTTOM NAV -->
+  <!-- SHOPPING LIST VIEW -->
+  <div id="shoppingView" class="view">
+    <div class="shopping-header">
+      <div class="shopping-title">購買清單</div>
+      <div class="shopping-cats" id="shoppingCatTabs"></div>
+    </div>
+    <div class="shopping-progress" id="shoppingProgress"></div>
+    <div class="shopping-list" id="shoppingList"></div>
+  </div>
+
   <nav class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('home')" id="nav-home">
       <span class="nav-icon">🏠</span><span>首頁</span>
@@ -1266,6 +1473,9 @@
     </div>
     <div class="nav-item" onclick="switchTab('budget')" id="nav-budget">
       <span class="nav-icon">💴</span><span>預算</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('shopping')" id="nav-shopping">
+      <span class="nav-icon">🛒</span><span>清單</span>
     </div>
   </nav>
 </div>
@@ -1534,6 +1744,59 @@
   </div>
 </div>
 
+<!-- SHOPPING ITEM MODAL -->
+<div class="modal-overlay" id="shopItemModal">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <div class="modal-title" id="shopItemModalTitle">新增項目</div>
+      <button class="modal-close" onclick="closeModal('shopItemModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">分類</label>
+        <div class="shop-cat-btns" id="shopCatBtns">
+          <button class="shop-cat-btn active" data-cat="美妝" onclick="setShopCat('美妝')">💄 美妝</button>
+          <button class="shop-cat-btn" data-cat="食物" onclick="setShopCat('食物')">🍡 食物</button>
+          <button class="shop-cat-btn" data-cat="黑膠" onclick="setShopCat('黑膠')">🎵 黑膠</button>
+          <button class="shop-cat-btn" data-cat="雜貨" onclick="setShopCat('雜貨')">🛍️ 雜貨</button>
+        </div>
+      </div>
+      <div class="form-group" id="shopNameGroup">
+        <label class="form-label">名稱</label>
+        <input type="text" class="form-input" id="shopName" placeholder="商品名稱">
+      </div>
+      <!-- 黑膠專用欄位 -->
+      <div id="shopVinylFields" style="display:none">
+        <div class="form-group">
+          <label class="form-label">唱片名稱</label>
+          <input type="text" class="form-input" id="shopRecordName" placeholder="Album / Artist">
+        </div>
+        <div class="form-group">
+          <label class="form-label">UPC 條碼</label>
+          <input type="text" class="form-input" id="shopUpc" placeholder="012345678901" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label class="form-label">數量</label>
+          <input type="number" class="form-input" id="shopQty" value="1" min="1" placeholder="1">
+        </div>
+      </div>
+      <div class="form-group" id="shopQtyGroup" style="display:none">
+        <label class="form-label">數量</label>
+        <input type="number" class="form-input" id="shopQtyOther" value="1" min="1" placeholder="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">備註</label>
+        <input type="text" class="form-input" id="shopNotes" placeholder="品牌、規格、顏色…">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="shopDeleteBtn" onclick="deleteShopItem()" style="display:none">刪除</button>
+      <button class="btn-secondary" onclick="closeModal('shopItemModal')">取消</button>
+      <button class="btn-primary" onclick="saveShopItem()">儲存</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -1627,7 +1890,8 @@ let state = {
   startDate: '',
   endDate: '',
   numPeople: 1,
-  days: []
+  days: [],
+  shoppingList: []
 };
 
 let currentView = 'home';
@@ -1639,6 +1903,11 @@ let transitFromIndex = null;
 let transitEditIndex = null;
 let selectedCityTab = '東京';
 let sidebarCategory = '全部';
+
+// Shopping list state
+let currentShopCat = '全部';
+let editingShopId = null;
+let currentShopItemCat = '美妝';
 
 // Calendar state
 let calYear, calMonth;
@@ -1848,25 +2117,33 @@ function loadState() {
   try {
     const s = localStorage.getItem('japanTrip');
     if (s) state = { ...state, ...JSON.parse(s) };
+    if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
     renumberDays(); // 修正舊資料的天數編號
   } catch(e) {}
 }
 
 // ===== TAB SWITCHING =====
 function switchTab(tab) {
-  // hide day view fab if switching away
+  // hide both fabs when switching tabs
   document.getElementById('fabBtn').style.display = 'none';
-  ['home','trip','budget'].forEach(t => {
-    document.getElementById('nav-' + t).classList.toggle('active', t === tab);
+  document.getElementById('shopFabBtn').style.display = 'none';
+  ['home','trip','budget','shopping'].forEach(t => {
+    const el = document.getElementById('nav-' + t);
+    if (el) el.classList.toggle('active', t === tab);
   });
   document.getElementById('homeView').classList.toggle('active', tab === 'home');
   document.getElementById('tripView').classList.toggle('active', tab === 'trip');
   document.getElementById('budgetView').classList.toggle('active', tab === 'budget');
+  document.getElementById('shoppingView').classList.toggle('active', tab === 'shopping');
   document.getElementById('dayView').classList.remove('active');
   currentView = tab;
   if (tab === 'home') renderHome();
   if (tab === 'trip') renderTrip();
   if (tab === 'budget') renderBudget();
+  if (tab === 'shopping') {
+    document.getElementById('shopFabBtn').style.display = 'flex';
+    renderShoppingView();
+  }
 }
 
 function showDayView(dayId) {
@@ -2845,6 +3122,191 @@ function deleteTransit() {
   showToast('已刪除交通');
 }
 
+// ===== SHOPPING LIST =====
+const SHOP_CAT_ICONS = { '全部':'📋', '美妝':'💄', '食物':'🍡', '黑膠':'🎵', '雜貨':'🛍️' };
+const SHOP_CAT_ORDER = ['美妝', '食物', '黑膠', '雜貨'];
+
+function renderShoppingView() {
+  if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
+
+  // Category filter tabs
+  const catTabs = document.getElementById('shoppingCatTabs');
+  if (!catTabs) return;
+  catTabs.innerHTML = ['全部', ...SHOP_CAT_ORDER].map(c =>
+    `<button class="shop-filter-btn ${currentShopCat === c ? 'active' : ''}" onclick="setShopFilterCat('${c}')">${SHOP_CAT_ICONS[c]} ${c}</button>`
+  ).join('');
+
+  // Filtered items
+  const list = state.shoppingList;
+  const filtered = currentShopCat === '全部' ? list : list.filter(i => i.cat === currentShopCat);
+  const checked = filtered.filter(i => i.checked).length;
+  const total = filtered.length;
+
+  // Progress bar
+  const progressEl = document.getElementById('shoppingProgress');
+  if (total > 0) {
+    progressEl.innerHTML = `
+      <div class="progress-text">${checked} / ${total} 已購買</div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${Math.round(checked/total*100)}%"></div></div>`;
+  } else {
+    progressEl.innerHTML = '';
+  }
+
+  // Item list
+  const listEl = document.getElementById('shoppingList');
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="shop-empty">還沒有項目<br><span>點右下角 ＋ 新增</span></div>`;
+    return;
+  }
+
+  let html = '';
+  if (currentShopCat === '全部') {
+    SHOP_CAT_ORDER.forEach(cat => {
+      const catItems = list.filter(i => i.cat === cat);
+      if (catItems.length === 0) return;
+      html += `<div class="shop-group-header">${SHOP_CAT_ICONS[cat]} ${cat}</div>`;
+      catItems.forEach(item => { html += buildShopItemHtml(item); });
+    });
+  } else {
+    filtered.forEach(item => { html += buildShopItemHtml(item); });
+  }
+  listEl.innerHTML = html;
+}
+
+function buildShopItemHtml(item) {
+  const isVinyl = item.cat === '黑膠';
+  const parts = [];
+  if (isVinyl) {
+    if (item.recordName && item.recordName !== item.name) parts.push(item.recordName);
+    if (item.upc) parts.push('UPC: ' + item.upc);
+  }
+  if (item.qty > 1) parts.push('×' + item.qty);
+  if (item.notes) parts.push(item.notes);
+  const meta = parts.join(' · ');
+
+  return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
+    <div class="shop-checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
+    <div class="shop-item-content">
+      <div class="shop-item-name">${escHtml(item.name || '（未命名）')}</div>
+      ${meta ? `<div class="shop-item-meta">${escHtml(meta)}</div>` : ''}
+    </div>
+    ${isVinyl ? '<span class="shop-vinyl-badge">🎵</span>' : ''}
+  </div>`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setShopFilterCat(cat) {
+  currentShopCat = cat;
+  renderShoppingView();
+}
+
+function openAddShopItem() {
+  editingShopId = null;
+  document.getElementById('shopItemModalTitle').textContent = '新增項目';
+  document.getElementById('shopDeleteBtn').style.display = 'none';
+  document.getElementById('shopName').value = '';
+  document.getElementById('shopRecordName').value = '';
+  document.getElementById('shopUpc').value = '';
+  document.getElementById('shopQty').value = '1';
+  document.getElementById('shopQtyOther').value = '1';
+  document.getElementById('shopNotes').value = '';
+  setShopCat('美妝');
+  openModal('shopItemModal');
+}
+
+function editShopItem(id) {
+  const item = (state.shoppingList || []).find(i => i.id === id);
+  if (!item) return;
+  editingShopId = id;
+  document.getElementById('shopItemModalTitle').textContent = '編輯項目';
+  document.getElementById('shopDeleteBtn').style.display = '';
+  document.getElementById('shopName').value = item.name || '';
+  document.getElementById('shopRecordName').value = item.recordName || '';
+  document.getElementById('shopUpc').value = item.upc || '';
+  document.getElementById('shopQty').value = item.qty || 1;
+  document.getElementById('shopQtyOther').value = item.qty || 1;
+  document.getElementById('shopNotes').value = item.notes || '';
+  setShopCat(item.cat || '美妝');
+  openModal('shopItemModal');
+}
+
+function setShopCat(cat) {
+  currentShopItemCat = cat;
+  document.querySelectorAll('.shop-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === cat);
+  });
+  const isVinyl = cat === '黑膠';
+  document.getElementById('shopVinylFields').style.display = isVinyl ? '' : 'none';
+  document.getElementById('shopQtyGroup').style.display = isVinyl ? 'none' : '';
+  document.getElementById('shopNameGroup').style.display = isVinyl ? 'none' : '';
+}
+
+function saveShopItem() {
+  const cat = currentShopItemCat;
+  const isVinyl = cat === '黑膠';
+  let name, recordName, upc, qty, notes;
+
+  notes = document.getElementById('shopNotes').value.trim();
+  if (isVinyl) {
+    recordName = document.getElementById('shopRecordName').value.trim();
+    upc = document.getElementById('shopUpc').value.trim();
+    qty = parseInt(document.getElementById('shopQty').value) || 1;
+    name = recordName;
+  } else {
+    name = document.getElementById('shopName').value.trim();
+    qty = parseInt(document.getElementById('shopQtyOther').value) || 1;
+  }
+
+  if (!name) { showToast('請輸入名稱'); return; }
+  if (!Array.isArray(state.shoppingList)) state.shoppingList = [];
+
+  if (editingShopId) {
+    const idx = state.shoppingList.findIndex(i => i.id === editingShopId);
+    if (idx >= 0) {
+      const old = state.shoppingList[idx];
+      state.shoppingList[idx] = {
+        id: old.id, checked: old.checked, cat,
+        name, recordName: isVinyl ? recordName : undefined,
+        upc: isVinyl ? upc : undefined, qty, notes
+      };
+    }
+  } else {
+    state.shoppingList.push({
+      id: 'shop-' + Date.now(),
+      cat, name,
+      recordName: isVinyl ? recordName : undefined,
+      upc: isVinyl ? upc : undefined,
+      qty, notes, checked: false
+    });
+  }
+
+  saveState();
+  closeModal('shopItemModal');
+  renderShoppingView();
+  showToast(editingShopId ? '已更新' : '已新增');
+}
+
+function deleteShopItem() {
+  if (!editingShopId) return;
+  if (!confirm('確定要刪除這個項目嗎？')) return;
+  state.shoppingList = (state.shoppingList || []).filter(i => i.id !== editingShopId);
+  saveState();
+  closeModal('shopItemModal');
+  renderShoppingView();
+  showToast('已刪除');
+}
+
+function toggleShopItem(id) {
+  const item = (state.shoppingList || []).find(i => i.id === id);
+  if (!item) return;
+  item.checked = !item.checked;
+  saveState();
+  renderShoppingView();
+}
+
 // ===== MODALS =====
 function openModal(id) {
   document.getElementById(id).classList.add('active');
@@ -2889,7 +3351,7 @@ function init() {
   renderBudget();
 
   // Pull to refresh on all views
-  ['homeView','tripView','budgetView','dayView'].forEach(id => {
+  ['homeView','tripView','budgetView','dayView','shoppingView'].forEach(id => {
     const el = document.getElementById(id);
     if (el) initPullToRefresh(el);
   });
