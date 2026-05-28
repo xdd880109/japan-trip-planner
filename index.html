@@ -1930,6 +1930,22 @@
         <label class="form-label">名稱</label>
         <input type="text" class="form-input" id="shopName" placeholder="商品名稱">
       </div>
+      <!-- 通用商品圖片（非黑膠類別顯示） -->
+      <div class="form-group" id="shopPhotoGroup" style="display:none">
+        <label class="form-label">商品圖片</label>
+        <div class="vinyl-cover-row" id="itemCoverRow">
+          <img id="itemCoverImg" class="vinyl-cover-img" src="">
+          <div class="vinyl-cover-info">
+            <div class="vinyl-cover-title" id="itemCoverTitle">圖片預覽</div>
+          </div>
+          <button class="vinyl-cover-clear" onclick="clearItemPhoto()">✕</button>
+        </div>
+        <div class="vinyl-upload-hint" id="itemUploadHint">
+          <button onclick="document.getElementById('itemPhotoInput').click()">📷 上傳 / 拍照</button>
+          <button onclick="pasteItemPhoto()">📋 貼上圖片</button>
+          <input type="file" id="itemPhotoInput" accept="image/*" style="display:none" onchange="handleItemPhoto(this)">
+        </div>
+      </div>
       <!-- 黑膠專用欄位 -->
       <div id="shopVinylFields" style="display:none">
         <!-- 搜尋 -->
@@ -2106,10 +2122,12 @@ let currentShopPerson = '全部';
 let editingShopId = null;
 let currentShopItemCat = '美妝';
 let currentShopItemPerson = '我';
-let vinylPhotoData = null;    // 手動上傳的圖片 data URL
-let vinylPhotoChanged = false; // 手動圖片是否變動
-let vinylCoverUrl = null;      // iTunes 搜尋到的封面 URL
+let vinylPhotoData = null;    // 黑膠手動上傳圖片
+let vinylPhotoChanged = false;
+let vinylCoverUrl = null;      // iTunes 封面 URL
 let vinylSearchTimer = null;
+let itemPhotoData = null;      // 非黑膠通用圖片
+let itemPhotoChanged = false;
 
 // Calendar state
 let calYear, calMonth;
@@ -3518,17 +3536,69 @@ async function pasteVinylPhoto() {
   }
 }
 
-// Ctrl+V / ⌘V 全域監聽（modal 開啟且是黑膠時才作用）
+// ── 通用商品圖片（非黑膠類別）──
+async function processItemPhoto(file) {
+  const dataUrl = await cropSquareAndResize(file, 250);
+  itemPhotoData = dataUrl;
+  itemPhotoChanged = true;
+  document.getElementById('itemCoverImg').src = dataUrl;
+  document.getElementById('itemCoverTitle').textContent = '商品圖片';
+  document.getElementById('itemCoverRow').classList.add('show');
+  document.getElementById('itemUploadHint').style.display = 'none';
+  showToast('圖片已套用 ✓');
+}
+async function handleItemPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  await processItemPhoto(file);
+}
+async function pasteItemPhoto() {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          await processItemPhoto(await item.getType(type));
+          return;
+        }
+      }
+    }
+    showToast('剪貼簿沒有圖片');
+  } catch(e) {
+    showToast('請直接按 Ctrl+V / ⌘V 貼上');
+  }
+}
+function clearItemPhoto() {
+  itemPhotoData = null;
+  itemPhotoChanged = true;
+  document.getElementById('itemCoverRow').classList.remove('show');
+  document.getElementById('itemUploadHint').style.display = 'flex';
+}
+function resetItemPhotoUI() {
+  itemPhotoData = null;
+  itemPhotoChanged = false;
+  const row = document.getElementById('itemCoverRow');
+  const hint = document.getElementById('itemUploadHint');
+  if (row) row.classList.remove('show');
+  if (hint) hint.style.display = 'flex';
+}
+
+// Ctrl+V / ⌘V 全域監聽（modal 開啟時，依分類路由到對應處理器）
 document.addEventListener('paste', async (e) => {
   if (!document.getElementById('shopItemModal')?.classList.contains('active')) return;
-  if (currentShopItemCat !== '黑膠') return;
   const items = e.clipboardData?.items;
   if (!items) return;
   for (const item of items) {
     if (item.type.startsWith('image/')) {
       e.preventDefault();
       const file = item.getAsFile();
-      if (file) await processVinylPhoto(file);
+      if (!file) break;
+      if (currentShopItemCat === '黑膠') {
+        await processVinylPhoto(file);
+      } else {
+        await processItemPhoto(file);
+      }
       break;
     }
   }
@@ -3632,7 +3702,7 @@ function buildShopItemHtml(item, showPersonBadge) {
   const meta = parts.join(' · ');
   const personBadge = showPersonBadge ? `<span class="shop-person-badge">${escHtml(item.person || '我')}</span>` : '';
 
-  // 黑膠縮圖：coverUrl（iTunes）→ localPhotoData（手動同步）→ hasPhoto（舊版）→ 🎵
+  // 縮圖：黑膠用 vinyl-thumb，其他類別有 localPhotoData 也顯示
   let vinylThumb = '';
   if (isVinyl) {
     if (item.coverUrl) {
@@ -3645,6 +3715,8 @@ function buildShopItemHtml(item, showPersonBadge) {
     } else {
       vinylThumb = `<div class="vinyl-thumb">🎵</div>`;
     }
+  } else if (item.localPhotoData) {
+    vinylThumb = `<div class="vinyl-thumb"><img src="${item.localPhotoData}" loading="lazy"></div>`;
   }
 
   return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
@@ -3732,6 +3804,7 @@ function openAddShopItem() {
   document.getElementById('shopQtyOther').value = '1';
   document.getElementById('shopNotes').value = '';
   _resetVinylCoverUI();
+  resetItemPhotoUI();
   const defaultPerson = (currentShopPerson !== '全部') ? currentShopPerson : (state.shopPeople[0] || '我');
   currentShopItemPerson = defaultPerson;
   renderShopPersonBtns(defaultPerson);
@@ -3756,9 +3829,10 @@ async function editShopItem(id) {
   renderShopPersonBtns(person);
   setShopCat(item.cat || '美妝');
   _resetVinylCoverUI();
+  resetItemPhotoUI();
   openModal('shopItemModal');
-  // 載入既有封面（coverUrl = iTunes；localPhotoData = 手動上傳同步版；hasPhoto = 舊版 IndexedDB）
   if (item.cat === '黑膠') {
+    // 黑膠：iTunes URL 優先，其次手動上傳
     if (item.coverUrl) {
       vinylCoverUrl = item.coverUrl;
       showVinylCover(item.coverUrl, item.name || '', item.artist || '');
@@ -3766,12 +3840,18 @@ async function editShopItem(id) {
       vinylPhotoData = item.localPhotoData;
       showVinylCover(item.localPhotoData, '手動上傳', '');
     } else if (item.hasPhoto) {
-      // 舊版相容：從 IndexedDB 讀取
       try {
         const img = await getVinylImage(id);
         if (img) { vinylPhotoData = img; showVinylCover(img, '手動上傳', ''); }
       } catch(e) {}
     }
+  } else if (item.localPhotoData) {
+    // 非黑膠：有圖就顯示
+    itemPhotoData = item.localPhotoData;
+    document.getElementById('itemCoverImg').src = item.localPhotoData;
+    document.getElementById('itemCoverTitle').textContent = '商品圖片';
+    document.getElementById('itemCoverRow').classList.add('show');
+    document.getElementById('itemUploadHint').style.display = 'none';
   }
 }
 
@@ -3784,6 +3864,7 @@ function setShopCat(cat) {
   document.getElementById('shopVinylFields').style.display = isVinyl ? '' : 'none';
   document.getElementById('shopQtyGroup').style.display = isVinyl ? 'none' : '';
   document.getElementById('shopNameGroup').style.display = isVinyl ? 'none' : '';
+  document.getElementById('shopPhotoGroup').style.display = isVinyl ? 'none' : '';
 }
 
 async function saveShopItem() {
@@ -3819,6 +3900,13 @@ async function saveShopItem() {
       localPhotoData = vinylPhotoData || undefined; // null → undefined（從 state 移除）
     } else {
       // 沒有改：保留舊的
+      const existing = (state.shoppingList || []).find(i => i.id === itemId);
+      localPhotoData = existing ? existing.localPhotoData : undefined;
+    }
+  } else if (!isVinyl) {
+    if (itemPhotoChanged) {
+      localPhotoData = itemPhotoData || undefined;
+    } else {
       const existing = (state.shoppingList || []).find(i => i.id === itemId);
       localPhotoData = existing ? existing.localPhotoData : undefined;
     }
