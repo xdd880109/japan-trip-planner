@@ -2395,10 +2395,10 @@ async function pullFromCloud(force = false) {
       const localCount = countPlaces(state);
       const serverCount = countPlaces(json.data);
 
-      // force=true（手動下拉）：只要雲端有資料就同步
+      // force=true（手動下拉）：直接覆蓋，不做時間比較
       // 自動同步：雲端比本地新 且 地點數不少於本地
       const shouldUpdate = force
-        ? (serverTs > localTs || serverCount !== localCount)
+        ? true
         : (serverTs > localTs && serverCount >= localCount);
 
       if (shouldUpdate) {
