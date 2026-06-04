@@ -2403,7 +2403,7 @@ async function pullFromCloud(force = false) {
       if (shouldUpdate) {
         state = { ...state, ...json.data };
         saveStateLocal();
-        renderHome(); renderTrip(); renderBudget();
+        renderHome(); renderTrip(); renderAccounting();
         showToast(force ? '已同步最新行程 ☁️' : '已從雲端載入最新行程 ☁️');
       } else if (force) {
         showToast('已是最新，無需更新 ✓');
