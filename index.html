@@ -847,6 +847,75 @@
     justify-content: space-between;
   }
 
+  /* ===== DAY SHOPPING REMINDER ===== */
+  .day-shop-card {
+    background: #fff9e6;
+    border: 1.5px solid #f0c040;
+    border-radius: var(--radius);
+    margin: 10px 16px 0;
+    overflow: hidden;
+  }
+  .day-shop-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #7a5c00;
+  }
+  .day-shop-count {
+    font-size: 11px;
+    font-weight: 600;
+    background: #f0c040;
+    color: #5a3e00;
+    border-radius: 10px;
+    padding: 2px 8px;
+  }
+  .day-shop-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px;
+    border-top: 1px solid #f5e5a0;
+    cursor: pointer;
+  }
+  .day-shop-item:active { background: #f5e9b0; }
+  .day-shop-item.bought { opacity: 0.45; }
+  .day-shop-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #c8a000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    color: white;
+  }
+  .day-shop-check.done { background: #c8a000; border-color: #c8a000; }
+  .day-shop-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .day-shop-meta { font-size: 11px; color: var(--text-sub); }
+  .day-shop-person {
+    font-size: 10px;
+    background: #f0c040;
+    color: #5a3e00;
+    border-radius: 8px;
+    padding: 1px 6px;
+    font-weight: 600;
+  }
+  .shop-remind-badge {
+    font-size: 10px;
+    background: #fff3b0;
+    color: #7a5c00;
+    border: 1px solid #f0c040;
+    border-radius: 8px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    white-space: nowrap;
+  }
+
   /* ===== MODALS ===== */
   .modal-overlay {
     display: none;
@@ -2194,6 +2263,12 @@
         <label class="form-label">店家網址（選填）</label>
         <input type="url" class="form-input" id="shopUrl" placeholder="https://..." autocomplete="off" spellcheck="false">
       </div>
+      <div class="form-group">
+        <label class="form-label">📍 提醒我在哪天買（選填）</label>
+        <select class="form-input" id="shopRemindDay">
+          <option value="">不設定</option>
+        </select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-danger" id="shopDeleteBtn" onclick="deleteShopItem()" style="display:none">刪除</button>
@@ -2839,10 +2914,35 @@ function renderDayView() {
     placesHtml += '</div>';
   }
 
+  // Shopping reminders for this day
+  const dayShopItems = (state.shoppingList || []).filter(i => i.remindDayId === day.id);
+  let shopReminderHtml = '';
+  if (dayShopItems.length > 0) {
+    const doneCount = dayShopItems.filter(i => i.checked).length;
+    const rows = dayShopItems.map(item => `
+      <div class="day-shop-item ${item.checked ? 'bought' : ''}" onclick="editShopItem('${item.id}')">
+        <div class="day-shop-check ${item.checked ? 'done' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
+        <div style="flex:1;min-width:0">
+          <div class="day-shop-name">${escHtml(item.name || '（未命名）')}</div>
+          <div class="day-shop-meta">${SHOP_CAT_ICONS[item.cat] || ''} ${escHtml(item.cat || '')}${item.notes ? ' · ' + escHtml(item.notes) : ''}</div>
+        </div>
+        ${state.shopPeople.length > 1 ? `<span class="day-shop-person">${escHtml(item.person || '我')}</span>` : ''}
+      </div>`).join('');
+    shopReminderHtml = `
+      <div class="day-shop-card">
+        <div class="day-shop-header">
+          <span>🛍️ 今日待買</span>
+          <span class="day-shop-count">${doneCount}/${dayShopItems.length} 已買</span>
+        </div>
+        ${rows}
+      </div>`;
+  }
+
   content.innerHTML = `
     <div class="map-section" onclick="window.open('${mapsUrl}','_blank')">
       🗺️ 在 Google Maps 查看路線
     </div>
+    ${shopReminderHtml}
     ${hotelBanner}
     ${totalBar}
     ${placesHtml}
@@ -4018,6 +4118,26 @@ async function loadVinylThumbs() {
   }
 }
 
+// ===== SHOPPING REMINDER HELPERS =====
+function populateRemindDaySelect(selectedId) {
+  const sel = document.getElementById('shopRemindDay');
+  if (!sel) return;
+  const days = state.days || [];
+  sel.innerHTML = '<option value="">不設定</option>' + days.map((day, i) => {
+    const d = parseDate(day.date);
+    const label = `第${i+1}天${d ? ` ${d.getMonth()+1}/${d.getDate()}` : ''}`;
+    return `<option value="${day.id}" ${day.id === selectedId ? 'selected' : ''}>${escHtml(label)}</option>`;
+  }).join('');
+}
+
+function getDayLabel(dayId) {
+  const days = state.days || [];
+  const idx = days.findIndex(d => d.id === dayId);
+  if (idx < 0) return null;
+  const d = parseDate(days[idx].date);
+  return `第${idx+1}天${d ? ` ${d.getMonth()+1}/${d.getDate()}` : ''}`;
+}
+
 // ===== SHOPPING LIST =====
 const SHOP_CAT_ICONS = { '全部':'📋', '美妝':'💄', '食物':'🍡', '服飾':'👗', '黑膠':'🎵', '雜貨':'🛍️' };
 const SHOP_CAT_ORDER = ['美妝', '食物', '服飾', '黑膠', '雜貨'];
@@ -4125,11 +4245,14 @@ function buildShopItemHtml(item, showPersonBadge) {
   const urlLink = item.url
     ? `<a class="shop-item-url" href="${escHtml(item.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 前往</a>`
     : '';
+  const remindBadge = item.remindDayId
+    ? `<span class="shop-remind-badge">📍 ${escHtml(getDayLabel(item.remindDayId) || '')}</span>`
+    : '';
 
   return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
     <div class="shop-checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
     <div class="shop-item-content">
-      <div class="shop-item-name">${escHtml(item.name || '（未命名）')}</div>
+      <div class="shop-item-name">${escHtml(item.name || '（未命名）')}${remindBadge}</div>
       ${meta ? `<div class="shop-item-meta">${escHtml(meta)}</div>` : ''}
       ${urlLink}
     </div>
@@ -4212,6 +4335,7 @@ function openAddShopItem() {
   document.getElementById('shopQtyOther').value = '1';
   document.getElementById('shopNotes').value = '';
   document.getElementById('shopUrl').value = '';
+  populateRemindDaySelect('');
   _resetVinylCoverUI();
   resetItemPhotoUI();
   const defaultPerson = (currentShopPerson !== '全部') ? currentShopPerson : (state.shopPeople[0] || '我');
@@ -4234,6 +4358,7 @@ async function editShopItem(id) {
   document.getElementById('shopQtyOther').value = item.qty || 1;
   document.getElementById('shopNotes').value = item.notes || '';
   document.getElementById('shopUrl').value = item.url || '';
+  populateRemindDaySelect(item.remindDayId || '');
   const person = item.person || '我';
   currentShopItemPerson = person;
   renderShopPersonBtns(person);
@@ -4280,10 +4405,11 @@ function setShopCat(cat) {
 async function saveShopItem() {
   const cat = currentShopItemCat;
   const isVinyl = cat === '黑膠';
-  let name, recordName, upc, qty, notes, url;
+  let name, recordName, upc, qty, notes, url, remindDayId;
 
   notes = document.getElementById('shopNotes').value.trim();
   url = document.getElementById('shopUrl').value.trim() || undefined;
+  remindDayId = document.getElementById('shopRemindDay').value || undefined;
   if (isVinyl) {
     recordName = document.getElementById('shopRecordName').value.trim();
     upc = document.getElementById('shopUpc').value.trim();
@@ -4331,7 +4457,7 @@ async function saveShopItem() {
         id: old.id, checked: old.checked, cat, person,
         coverUrl, artist, localPhotoData,
         name, recordName: isVinyl ? recordName : undefined,
-        upc: isVinyl ? upc : undefined, qty, notes, url
+        upc: isVinyl ? upc : undefined, qty, notes, url, remindDayId
       };
     }
   } else {
@@ -4340,7 +4466,7 @@ async function saveShopItem() {
       coverUrl, artist, localPhotoData,
       name, recordName: isVinyl ? recordName : undefined,
       upc: isVinyl ? upc : undefined,
-      qty, notes, url, checked: false
+      qty, notes, url, remindDayId, checked: false
     });
   }
 
