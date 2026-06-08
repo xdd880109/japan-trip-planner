@@ -4119,13 +4119,27 @@ async function loadVinylThumbs() {
 }
 
 // ===== SHOPPING REMINDER HELPERS =====
+function getDayPlaceSummary(day) {
+  const places = (day.places || [])
+    .filter(p => !p.isAccommodation)
+    .map(p => p.name)
+    .filter(Boolean);
+  if (places.length === 0) return '';
+  // Show up to 3 places
+  const shown = places.slice(0, 3);
+  const more = places.length > 3 ? `+${places.length - 3}` : '';
+  return shown.join('・') + (more ? `・${more}` : '');
+}
+
 function populateRemindDaySelect(selectedId) {
   const sel = document.getElementById('shopRemindDay');
   if (!sel) return;
   const days = state.days || [];
   sel.innerHTML = '<option value="">不設定</option>' + days.map((day, i) => {
     const d = parseDate(day.date);
-    const label = `第${i+1}天${d ? ` ${d.getMonth()+1}/${d.getDate()}` : ''}`;
+    const dateStr = d ? ` ${d.getMonth()+1}/${d.getDate()}` : '';
+    const places = getDayPlaceSummary(day);
+    const label = `第${i+1}天${dateStr}${places ? '  ' + places : '（尚無安排）'}`;
     return `<option value="${day.id}" ${day.id === selectedId ? 'selected' : ''}>${escHtml(label)}</option>`;
   }).join('');
 }
@@ -4134,8 +4148,10 @@ function getDayLabel(dayId) {
   const days = state.days || [];
   const idx = days.findIndex(d => d.id === dayId);
   if (idx < 0) return null;
-  const d = parseDate(days[idx].date);
-  return `第${idx+1}天${d ? ` ${d.getMonth()+1}/${d.getDate()}` : ''}`;
+  const day = days[idx];
+  const d = parseDate(day.date);
+  const dateStr = d ? ` ${d.getMonth()+1}/${d.getDate()}` : '';
+  return `第${idx+1}天${dateStr}`;
 }
 
 // ===== SHOPPING LIST =====
