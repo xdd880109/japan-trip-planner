@@ -915,6 +915,26 @@
     margin-left: 4px;
     white-space: nowrap;
   }
+  .shop-recipient-badge {
+    font-size: 10px;
+    background: #f0e6ff;
+    color: #6b21a8;
+    border: 1px solid #d8b4fe;
+    border-radius: 8px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    white-space: nowrap;
+  }
+  .recipient-quick-chip {
+    font-size: 12px;
+    background: var(--gray-bg);
+    border: 1px solid var(--gray-border);
+    border-radius: 14px;
+    padding: 4px 10px;
+    cursor: pointer;
+    color: var(--text-sub);
+  }
+  .recipient-quick-chip:active { background: #e8d5ff; border-color: #d8b4fe; color: #6b21a8; }
 
   /* ===== MODALS ===== */
   .modal-overlay {
@@ -2256,6 +2276,11 @@
         <input type="number" class="form-input" id="shopQtyOther" value="1" min="1" placeholder="1">
       </div>
       <div class="form-group">
+        <label class="form-label">🎁 要買給誰（選填）</label>
+        <input type="text" class="form-input" id="shopRecipient" placeholder="例：媽媽、同事、自己…" autocomplete="off">
+        <div id="recipientChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+      </div>
+      <div class="form-group">
         <label class="form-label">備註</label>
         <input type="text" class="form-input" id="shopNotes" placeholder="品牌、規格、顏色…">
       </div>
@@ -2924,7 +2949,7 @@ function renderDayView() {
         <div class="day-shop-check ${item.checked ? 'done' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
         <div style="flex:1;min-width:0">
           <div class="day-shop-name">${escHtml(item.name || '（未命名）')}</div>
-          <div class="day-shop-meta">${SHOP_CAT_ICONS[item.cat] || ''} ${escHtml(item.cat || '')}${item.notes ? ' · ' + escHtml(item.notes) : ''}</div>
+          <div class="day-shop-meta">${SHOP_CAT_ICONS[item.cat] || ''} ${escHtml(item.cat || '')}${item.recipient ? ' · 🎁 ' + escHtml(item.recipient) : ''}${item.notes ? ' · ' + escHtml(item.notes) : ''}</div>
         </div>
         ${state.shopPeople.length > 1 ? `<span class="day-shop-person">${escHtml(item.person || '我')}</span>` : ''}
       </div>`).join('');
@@ -4119,6 +4144,21 @@ async function loadVinylThumbs() {
 }
 
 // ===== SHOPPING REMINDER HELPERS =====
+function renderRecipientChips() {
+  const container = document.getElementById('recipientChips');
+  if (!container) return;
+  // Collect unique recipients already used in the list
+  const used = [...new Set(
+    (state.shoppingList || []).map(i => i.recipient).filter(Boolean)
+  )];
+  // Common quick-picks
+  const defaults = ['媽媽','爸爸','自己','朋友','同事','伴手禮'];
+  const all = [...new Set([...defaults, ...used])];
+  container.innerHTML = all.map(r =>
+    `<span class="recipient-quick-chip" onclick="document.getElementById('shopRecipient').value='${escHtml(r)}'">${escHtml(r)}</span>`
+  ).join('');
+}
+
 function getDayPlaceSummary(day) {
   const places = (day.places || [])
     .filter(p => !p.isAccommodation)
@@ -4264,11 +4304,14 @@ function buildShopItemHtml(item, showPersonBadge) {
   const remindBadge = item.remindDayId
     ? `<span class="shop-remind-badge">📍 ${escHtml(getDayLabel(item.remindDayId) || '')}</span>`
     : '';
+  const recipientBadge = item.recipient
+    ? `<span class="shop-recipient-badge">🎁 ${escHtml(item.recipient)}</span>`
+    : '';
 
   return `<div class="shop-item ${item.checked ? 'checked' : ''}" onclick="editShopItem('${item.id}')">
     <div class="shop-checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation();toggleShopItem('${item.id}')">${item.checked ? '✓' : ''}</div>
     <div class="shop-item-content">
-      <div class="shop-item-name">${escHtml(item.name || '（未命名）')}${remindBadge}</div>
+      <div class="shop-item-name">${escHtml(item.name || '（未命名）')}${remindBadge}${recipientBadge}</div>
       ${meta ? `<div class="shop-item-meta">${escHtml(meta)}</div>` : ''}
       ${urlLink}
     </div>
@@ -4349,9 +4392,11 @@ function openAddShopItem() {
   document.getElementById('shopUpc').value = '';
   document.getElementById('shopQty').value = '1';
   document.getElementById('shopQtyOther').value = '1';
+  document.getElementById('shopRecipient').value = '';
   document.getElementById('shopNotes').value = '';
   document.getElementById('shopUrl').value = '';
   populateRemindDaySelect('');
+  renderRecipientChips();
   _resetVinylCoverUI();
   resetItemPhotoUI();
   const defaultPerson = (currentShopPerson !== '全部') ? currentShopPerson : (state.shopPeople[0] || '我');
@@ -4372,9 +4417,11 @@ async function editShopItem(id) {
   document.getElementById('shopUpc').value = item.upc || '';
   document.getElementById('shopQty').value = item.qty || 1;
   document.getElementById('shopQtyOther').value = item.qty || 1;
+  document.getElementById('shopRecipient').value = item.recipient || '';
   document.getElementById('shopNotes').value = item.notes || '';
   document.getElementById('shopUrl').value = item.url || '';
   populateRemindDaySelect(item.remindDayId || '');
+  renderRecipientChips();
   const person = item.person || '我';
   currentShopItemPerson = person;
   renderShopPersonBtns(person);
@@ -4423,6 +4470,7 @@ async function saveShopItem() {
   const isVinyl = cat === '黑膠';
   let name, recordName, upc, qty, notes, url, remindDayId;
 
+  const recipient = document.getElementById('shopRecipient').value.trim() || undefined;
   notes = document.getElementById('shopNotes').value.trim();
   url = document.getElementById('shopUrl').value.trim() || undefined;
   remindDayId = document.getElementById('shopRemindDay').value || undefined;
@@ -4473,7 +4521,7 @@ async function saveShopItem() {
         id: old.id, checked: old.checked, cat, person,
         coverUrl, artist, localPhotoData,
         name, recordName: isVinyl ? recordName : undefined,
-        upc: isVinyl ? upc : undefined, qty, notes, url, remindDayId
+        upc: isVinyl ? upc : undefined, qty, notes, url, recipient, remindDayId
       };
     }
   } else {
@@ -4482,7 +4530,7 @@ async function saveShopItem() {
       coverUrl, artist, localPhotoData,
       name, recordName: isVinyl ? recordName : undefined,
       upc: isVinyl ? upc : undefined,
-      qty, notes, url, remindDayId, checked: false
+      qty, notes, url, recipient, remindDayId, checked: false
     });
   }
 
