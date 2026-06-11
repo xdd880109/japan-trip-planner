@@ -2610,10 +2610,8 @@ async function applySyncId() {
   localStorage.removeItem('japanTripTs');
   closeSyncPanel();
   showToast('切換中，正在同步…');
-  // 先拉雲端（如果雲端資料更完整就用雲端的）
-  await pullFromCloud(false);
-  // 再把本機資料推上去（確保本機的地點不會消失）
-  await pushToCloud();
+  // 新裝置套用連接碼：強制拉取雲端資料（不推送，避免覆蓋其他裝置的資料）
+  await pullFromCloud(true);
   showToast('同步完成！✅');
 }
 
