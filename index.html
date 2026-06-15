@@ -3056,21 +3056,29 @@ function renderAccounting() {
       listHtml += `<div class="section-title">${dateStr}</div>`;
       recs.forEach(r => {
         const itemTotal = (r.items || []).reduce((s, i) => s + (i.price || 0), 0);
+        const totalTax = (r.items || []).reduce((s, i) => {
+          const rate = i.taxRate || 0;
+          return s + (rate > 0 ? Math.round((i.price || 0) * rate / (100 + rate)) : 0);
+        }, 0);
         const itemCount = (r.items || []).length;
-        const itemsHtml = (r.items || []).map(item => `
-          <div class="acc-item-row">
+        const itemsHtml = (r.items || []).map(item => {
+          const rate = item.taxRate || 0;
+          const taxAmt = rate > 0 ? Math.round((item.price || 0) * rate / (100 + rate)) : 0;
+          const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(稅¥${formatNum(taxAmt)})</span>` : '';
+          return `<div class="acc-item-row">
             <div class="acc-item-name">
               <div class="acc-item-cn">${escHtml(item.name || item.nameJp || '（未命名）')}</div>
               ${item.nameJp && item.name ? `<div class="acc-item-jp">${escHtml(item.nameJp)}</div>` : ''}
             </div>
-            <span class="acc-item-cat">${escHtml(item.cat || '雜貨')}</span>
-            <div class="acc-item-price">¥${formatNum(item.price || 0)}</div>
-          </div>`).join('');
+            <span class="acc-item-cat">${escHtml(item.cat || '雜貨')}${rate > 0 ? ` ${rate}%` : ''}</span>
+            <div class="acc-item-price">¥${formatNum(item.price || 0)}${taxBadge}</div>
+          </div>`;
+        }).join('');
         listHtml += `<div class="acc-entry-card" onclick="openEditReceipt('${r.id}')">
           <div class="acc-entry-header">
             <div>
               <div class="acc-entry-store">${escHtml(r.store || '購物')}</div>
-              <div class="acc-entry-meta">${itemCount} 件商品${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
+              <div class="acc-entry-meta">${itemCount} 件商品${totalTax > 0 ? ` · 含稅¥${formatNum(totalTax)}` : ''}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
             </div>
             <div style="text-align:right">
               <div class="acc-entry-total">¥${formatNum(itemTotal)}</div>
@@ -3143,6 +3151,11 @@ function renderAccModalItems() {
         <div style="display:flex;gap:6px">
           <select onchange="accItems[${idx}].cat=this.value" style="flex:1">${catOpts}</select>
           <input type="number" placeholder="¥ 金額" value="${item.price || ''}" min="0" oninput="accItems[${idx}].price=parseInt(this.value)||0" style="width:80px">
+          <select onchange="accItems[${idx}].taxRate=parseInt(this.value)" style="width:62px;font-size:12px">
+            <option value="0" ${(item.taxRate||0)===0?'selected':''}>無稅</option>
+            <option value="8" ${item.taxRate===8?'selected':''}>8%</option>
+            <option value="10" ${item.taxRate===10?'selected':''}>10%</option>
+          </select>
         </div>
       </div>
       <button class="acc-item-remove" onclick="removeAccItem(${idx})">✕</button>
@@ -3152,7 +3165,7 @@ function renderAccModalItems() {
 }
 
 function addManualAccItem() {
-  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨' });
+  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10 });
   renderAccModalItems();
 }
 
@@ -3227,6 +3240,7 @@ async function callClaudeVision(base64, mediaType) {
 [{"nameJp":"日文原名","name":"中文翻譯","price":金額整數,"cat":"類別"}]
 類別只能選：美妝、食物、服飾、交通、住宿、黑膠、雜貨
 化妝品/保養品→美妝，食品/飲料→食物，衣服/鞋子/包包→服飾，黑膠唱片→黑膠，其餘→雜貨。
+taxRate：食物/飲料通常是8，其他商品是10，若無稅則為0。
 price 為日圓含稅整數。只回傳 JSON，不要其他說明。` }
         ]
       }]
