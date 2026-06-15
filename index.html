@@ -3152,9 +3152,9 @@ function renderAccModalItems() {
           <select onchange="accItems[${idx}].cat=this.value" style="flex:1">${catOpts}</select>
           <input type="number" placeholder="¥ 金額" value="${item.price || ''}" min="0" oninput="accItems[${idx}].price=parseInt(this.value)||0" style="width:80px">
           <select onchange="accItems[${idx}].taxRate=parseInt(this.value)" style="width:62px;font-size:12px">
-            <option value="0" ${(item.taxRate||0)===0?'selected':''}>無稅</option>
+            <option value="0" ${item.taxRate===0?'selected':''}>無稅</option>
             <option value="8" ${item.taxRate===8?'selected':''}>8%</option>
-            <option value="10" ${item.taxRate===10?'selected':''}>10%</option>
+            <option value="10" ${(item.taxRate??10)===10?'selected':''}>10%</option>
           </select>
         </div>
       </div>
@@ -3195,7 +3195,7 @@ async function handleReceiptPhoto(input) {
     const base64 = dataUrl.split(',')[1];
     const items = await callClaudeVision(base64, file.type || 'image/jpeg');
     if (items && items.length > 0) {
-      accItems = items.map((item, i) => ({ id: 'item_' + Date.now() + i, ...item }));
+      accItems = items.map((item, i) => ({ taxRate: 10, ...item, id: 'item_' + Date.now() + i }));
       showToast(`辨識到 ${items.length} 件商品 ✓`);
     } else {
       showToast('未辨識到商品，請手動新增');
