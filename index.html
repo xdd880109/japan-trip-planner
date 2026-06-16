@@ -1883,6 +1883,15 @@
         <label class="form-label">備註（選填）</label>
         <textarea id="accNotes" class="form-input" rows="2" placeholder=""></textarea>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#e6f9f0;border:1.5px solid #34c77b;border-radius:var(--radius-sm);padding:12px 14px;margin-top:4px;cursor:pointer" onclick="toggleTaxRefund()">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#1a7a4a">🧾 已辦退稅</div>
+          <div style="font-size:11px;color:#2d9a5e;margin-top:2px">勾選後扣除稅額，顯示實際支出</div>
+        </div>
+        <div id="taxRefundToggle" style="width:44px;height:26px;border-radius:13px;background:#ccc;position:relative;transition:background 0.2s;flex-shrink:0">
+          <div style="width:22px;height:22px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer" style="display:flex;gap:8px">
       <button class="btn-primary" style="flex:1" onclick="saveReceipt()">儲存</button>
@@ -2994,9 +3003,10 @@ function renderAccounting() {
   // Filter by person
   const filtered = accFilterPerson === '全部' ? accounting : accounting.filter(r => r.person === accFilterPerson);
 
-  // Total（含稅：price × (1 + taxRate/100)）
+  // price × (1 + taxRate/100)；退稅收據只算原價（不加稅）
   const withTax = (i) => (i.price || 0) + Math.round((i.price || 0) * (i.taxRate || 0) / 100);
-  const totalJpy = filtered.reduce((sum, r) => sum + (r.items || []).reduce((s, i) => s + withTax(i), 0), 0);
+  const receiptTotal = (r) => (r.items || []).reduce((s, i) => s + (r.taxRefund ? (i.price||0) : withTax(i)), 0);
+  const totalJpy = filtered.reduce((sum, r) => sum + receiptTotal(r), 0);
   document.getElementById('accTotalJpy').textContent = `¥${formatNum(totalJpy)}`;
   document.getElementById('accTotalCount').textContent = `共 ${filtered.length} 筆收據`;
 
@@ -3019,7 +3029,7 @@ function renderAccounting() {
   ACC_CATS.forEach(c => { catSummary[c] = 0; });
   filtered.forEach(r => (r.items || []).forEach(i => {
     const cat = ACC_CATS.includes(i.cat) ? i.cat : '雜貨';
-    catSummary[cat] += withTax(i);
+    catSummary[cat] += r.taxRefund ? (i.price||0) : withTax(i);
   }));
   const catIcons = { '美妝':'💄','食物':'🍱','服飾':'👗','交通':'🚃','住宿':'🏨','黑膠':'🎵','雜貨':'🛍️' };
   const maxCat = Math.max(...Object.values(catSummary), 1);
@@ -3056,8 +3066,10 @@ function renderAccounting() {
       const dateStr = d ? `${d.getMonth()+1}月${d.getDate()}日 (週${WEEKDAYS[d.getDay()]})` : date;
       listHtml += `<div class="section-title">${dateStr}</div>`;
       recs.forEach(r => {
-        const itemTotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
         const totalTax = (r.items || []).reduce((s, i) => s + Math.round((i.price||0)*(i.taxRate||0)/100), 0);
+        const itemTotal = r.taxRefund
+          ? (r.items || []).reduce((s, i) => s + (i.price||0), 0)
+          : (r.items || []).reduce((s, i) => s + withTax(i), 0);
         const itemCount = (r.items || []).length;
         const itemsHtml = (r.items || []).map(item => {
           const rate = item.taxRate || 0;
@@ -3077,7 +3089,7 @@ function renderAccounting() {
           <div class="acc-entry-header">
             <div>
               <div class="acc-entry-store">${escHtml(r.store || '購物')}</div>
-              <div class="acc-entry-meta">${itemCount} 件商品${totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : ''}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
+              <div class="acc-entry-meta">${itemCount} 件商品${r.taxRefund ? ' · <span style="color:#1a7a4a;font-weight:700">🧾 已退稅-¥'+formatNum(totalTax)+'</span>' : (totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : '')}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
             </div>
             <div style="text-align:right">
               <div class="acc-entry-total">¥${formatNum(itemTotal)}</div>
@@ -3101,6 +3113,20 @@ function setAccPersonFilter(person) {
   renderAccounting();
 }
 
+let accTaxRefund = false;
+
+function setTaxRefundUI(val) {
+  accTaxRefund = val;
+  const toggle = document.getElementById('taxRefundToggle');
+  if (!toggle) return;
+  toggle.style.background = val ? '#34c77b' : '#ccc';
+  toggle.children[0].style.left = val ? '20px' : '2px';
+}
+
+function toggleTaxRefund() {
+  setTaxRefundUI(!accTaxRefund);
+}
+
 function openAddReceipt() {
   editingReceiptId = null;
   document.getElementById('receiptModalTitle').textContent = '新增收據';
@@ -3111,6 +3137,7 @@ function openAddReceipt() {
   personSel.innerHTML = (state.shopPeople || ['我']).map(p => `<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
   document.getElementById('accStore').value = '';
   document.getElementById('accNotes').value = '';
+  setTaxRefundUI(false);
   accItems = [];
   renderAccModalItems();
   openModal('receiptModal');
@@ -3129,6 +3156,7 @@ function openEditReceipt(id) {
   ).join('');
   document.getElementById('accStore').value = receipt.store || '';
   document.getElementById('accNotes').value = receipt.notes || '';
+  setTaxRefundUI(receipt.taxRefund || false);
   accItems = (receipt.items || []).map(i => ({ ...i }));
   renderAccModalItems();
   openModal('receiptModal');
@@ -3263,14 +3291,15 @@ function saveReceipt() {
   const person = document.getElementById('accPerson').value;
   const store = document.getElementById('accStore').value.trim();
   const notes = document.getElementById('accNotes').value.trim();
+  const taxRefund = accTaxRefund;
   if (!date) { showToast('請選擇日期'); return; }
   if (accItems.length === 0) { showToast('請新增至少一件商品'); return; }
   if (!state.accounting) state.accounting = [];
   if (editingReceiptId) {
     const idx = state.accounting.findIndex(r => r.id === editingReceiptId);
-    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, items: [...accItems] };
+    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefund, items: [...accItems] };
   } else {
-    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, items: [...accItems] });
+    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefund, items: [...accItems] });
   }
   saveState();
   closeModal('receiptModal');
