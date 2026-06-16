@@ -2080,6 +2080,11 @@
         <label class="form-label">備註（選填）</label>
         <textarea class="form-textarea" id="placeNotes" placeholder="任何備忘事項..."></textarea>
       </div>
+      <!-- Move to another day (edit only) -->
+      <div class="form-group" id="moveDayGroup" style="display:none">
+        <label class="form-label">📅 移到哪天</label>
+        <select class="form-select" id="placeTargetDay"></select>
+      </div>
     </div>
     <div class="modal-footer" id="placeModalFooter">
       <button class="btn-secondary" onclick="closeModal('placeModal')">取消</button>
@@ -3518,6 +3523,7 @@ function openAddPlace() {
   setCurrency('JPY');
   updateCostHint();
   document.getElementById('autocompleteList').classList.remove('open');
+  document.getElementById('moveDayGroup').style.display = 'none';
   renderCityTabs();
 
   const footer = document.getElementById('placeModalFooter');
@@ -3554,6 +3560,18 @@ function editPlace(placeId, fromOtherDay = false) {
   document.getElementById('autocompleteList').classList.remove('open');
   renderCityTabs();
 
+  // 顯示「移到哪天」選單
+  const moveDayGroup = document.getElementById('moveDayGroup');
+  const targetDaySel = document.getElementById('placeTargetDay');
+  moveDayGroup.style.display = '';
+  targetDaySel.innerHTML = state.days.map((d, i) => {
+    const dt = parseDate(d.date);
+    const dateStr = dt ? ` ${dt.getMonth()+1}/${dt.getDate()}` : '';
+    const places = d.places.filter(p => !p.isAccommodation).map(p => p.name).slice(0, 2).join('・');
+    const label = `第${i+1}天${dateStr}${places ? '  ' + places : ''}`;
+    return `<option value="${d.id}" ${d.id === day.id ? 'selected' : ''}>${escHtml(label)}</option>`;
+  }).join('');
+
   const footer = document.getElementById('placeModalFooter');
   footer.innerHTML = `<button class="btn-danger" onclick="deletePlace()">刪除</button>
     <button class="btn-secondary" onclick="closeModal('placeModal')">取消</button>
@@ -3579,9 +3597,21 @@ function savePlace() {
   };
 
   if (editingPlaceId) {
-    const idx = day.places.findIndex(p => p.id === editingPlaceId);
-    if (idx >= 0) {
-      day.places[idx] = { ...day.places[idx], ...placeData };
+    const targetDayId = document.getElementById('placeTargetDay')?.value;
+    const targetDay = targetDayId ? state.days.find(d => d.id === targetDayId) : day;
+    if (targetDay && targetDay.id !== day.id) {
+      // 移到別天：從原本的天移除，加到目標天
+      const idx = day.places.findIndex(p => p.id === editingPlaceId);
+      if (idx >= 0) {
+        const existing = day.places.splice(idx, 1)[0];
+        targetDay.places.push({ ...existing, ...placeData });
+        showToast(`已移到第${state.days.indexOf(targetDay)+1}天 ✓`);
+      }
+    } else {
+      const idx = (targetDay || day).places.findIndex(p => p.id === editingPlaceId);
+      if (idx >= 0) {
+        (targetDay || day).places[idx] = { ...(targetDay || day).places[idx], ...placeData };
+      }
     }
   } else {
     day.places.push({ id: genId(), ...placeData });
