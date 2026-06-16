@@ -2994,8 +2994,9 @@ function renderAccounting() {
   // Filter by person
   const filtered = accFilterPerson === '全部' ? accounting : accounting.filter(r => r.person === accFilterPerson);
 
-  // Total
-  const totalJpy = filtered.reduce((sum, r) => sum + (r.items || []).reduce((s, i) => s + (i.price || 0), 0), 0);
+  // Total（含稅：price × (1 + taxRate/100)）
+  const withTax = (i) => (i.price || 0) + Math.round((i.price || 0) * (i.taxRate || 0) / 100);
+  const totalJpy = filtered.reduce((sum, r) => sum + (r.items || []).reduce((s, i) => s + withTax(i), 0), 0);
   document.getElementById('accTotalJpy').textContent = `¥${formatNum(totalJpy)}`;
   document.getElementById('accTotalCount').textContent = `共 ${filtered.length} 筆收據`;
 
@@ -3018,7 +3019,7 @@ function renderAccounting() {
   ACC_CATS.forEach(c => { catSummary[c] = 0; });
   filtered.forEach(r => (r.items || []).forEach(i => {
     const cat = ACC_CATS.includes(i.cat) ? i.cat : '雜貨';
-    catSummary[cat] += (i.price || 0);
+    catSummary[cat] += withTax(i);
   }));
   const catIcons = { '美妝':'💄','食物':'🍱','服飾':'👗','交通':'🚃','住宿':'🏨','黑膠':'🎵','雜貨':'🛍️' };
   const maxCat = Math.max(...Object.values(catSummary), 1);
@@ -3055,30 +3056,28 @@ function renderAccounting() {
       const dateStr = d ? `${d.getMonth()+1}月${d.getDate()}日 (週${WEEKDAYS[d.getDay()]})` : date;
       listHtml += `<div class="section-title">${dateStr}</div>`;
       recs.forEach(r => {
-        const itemTotal = (r.items || []).reduce((s, i) => s + (i.price || 0), 0);
-        const totalTax = (r.items || []).reduce((s, i) => {
-          const rate = i.taxRate || 0;
-          return s + (rate > 0 ? Math.round((i.price || 0) * rate / (100 + rate)) : 0);
-        }, 0);
+        const itemTotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
+        const totalTax = (r.items || []).reduce((s, i) => s + Math.round((i.price||0)*(i.taxRate||0)/100), 0);
         const itemCount = (r.items || []).length;
         const itemsHtml = (r.items || []).map(item => {
           const rate = item.taxRate || 0;
-          const taxAmt = rate > 0 ? Math.round((item.price || 0) * rate / (100 + rate)) : 0;
-          const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(稅¥${formatNum(taxAmt)})</span>` : '';
+          const taxAmt = Math.round((item.price || 0) * rate / 100);
+          const priceWithTax = (item.price || 0) + taxAmt;
+          const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(+稅¥${formatNum(taxAmt)})</span>` : '';
           return `<div class="acc-item-row">
             <div class="acc-item-name">
               <div class="acc-item-cn">${escHtml(item.name || item.nameJp || '（未命名）')}</div>
               ${item.nameJp && item.name ? `<div class="acc-item-jp">${escHtml(item.nameJp)}</div>` : ''}
             </div>
             <span class="acc-item-cat">${escHtml(item.cat || '雜貨')}${rate > 0 ? ` ${rate}%` : ''}</span>
-            <div class="acc-item-price">¥${formatNum(item.price || 0)}${taxBadge}</div>
+            <div class="acc-item-price">¥${formatNum(priceWithTax)}${taxBadge}</div>
           </div>`;
         }).join('');
         listHtml += `<div class="acc-entry-card" onclick="openEditReceipt('${r.id}')">
           <div class="acc-entry-header">
             <div>
               <div class="acc-entry-store">${escHtml(r.store || '購物')}</div>
-              <div class="acc-entry-meta">${itemCount} 件商品${totalTax > 0 ? ` · 含稅¥${formatNum(totalTax)}` : ''}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
+              <div class="acc-entry-meta">${itemCount} 件商品${totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : ''}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
             </div>
             <div style="text-align:right">
               <div class="acc-entry-total">¥${formatNum(itemTotal)}</div>
