@@ -1960,7 +1960,7 @@
           <div style="font-size:11px;color:#1a7a4a;font-weight:600;margin-bottom:6px">📐 自動計算（手續費）</div>
           <div style="display:flex;gap:6px;align-items:center">
             <span style="font-size:12px;color:#2d7a4e;white-space:nowrap">手續費率</span>
-            <input type="number" id="refundFeeRate" value="1.55" step="0.01" min="0" style="width:60px;border:1px solid #a0d8b3;border-radius:6px;padding:4px 6px;font-size:12px;text-align:center">
+            <input type="number" id="refundFeeRate" value="2" step="0.01" min="0" style="width:60px;border:1px solid #a0d8b3;border-radius:6px;padding:4px 6px;font-size:12px;text-align:center">
             <span style="font-size:12px;color:#2d7a4e">%</span>
             <button onclick="calcTaxRefund()" style="flex:1;background:#34c77b;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">計算並填入</button>
           </div>
@@ -3293,18 +3293,28 @@ function setTaxRefundUI(val) {
 function toggleTaxRefund() {} // no-op, kept for compat
 
 function calcTaxRefund() {
-  const totalTax = accItems.reduce((s, i) => {
+  // 正確公式：(含稅金額 ÷ (1+稅率)) × (稅率 - 手續費率)
+  // 例：Alpen 收 2% 手續費 → 實際退 8% of 未稅金額
+  const feeRate = parseFloat(document.getElementById('refundFeeRate').value) || 2;
+  let totalTax = 0, totalFee = 0;
+  accItems.forEach(i => {
     const p = i.price || 0, d = i.discount || 0;
     const afterD = d > 0 ? (i.discountType === 'amt' ? Math.max(0, p - d) : Math.round(p * (100 - d) / 100)) : p;
     const r = i.taxRate || 0;
-    return s + (i.taxInclusive ? Math.round(afterD * r / (100 + r)) : Math.round(afterD * r / 100));
-  }, 0);
-  const feeRate = parseFloat(document.getElementById('refundFeeRate').value) || 1.55;
-  const fee = Math.round(totalTax * feeRate / 100);
-  const refund = Math.max(0, totalTax - fee);
+    if (r <= 0) return;
+    // 含稅金額
+    const taxInc = i.taxInclusive ? afterD : afterD + Math.round(afterD * r / 100);
+    // 預稅金額
+    const preTax = Math.round(taxInc * 100 / (100 + r));
+    const tax = taxInc - preTax;
+    const fee = Math.round(preTax * feeRate / 100);
+    totalTax += tax;
+    totalFee += fee;
+  });
+  const refund = Math.max(0, totalTax - totalFee);
   document.getElementById('taxRefundAmount').value = refund;
   document.getElementById('refundCalcHint').textContent =
-    `消費稅¥${formatNum(totalTax)} − 手續費¥${formatNum(fee)}(${feeRate}%) = 退稅¥${formatNum(refund)}`;
+    `消費稅¥${formatNum(totalTax)} − 手續費¥${formatNum(totalFee)}(${feeRate}%未稅) = 退稅¥${formatNum(refund)}`;
 }
 
 function openAddReceipt() {
