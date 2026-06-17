@@ -732,6 +732,47 @@
     line-height: 1;
     flex-shrink: 0;
   }
+  .pay-method-btn {
+    flex: 1;
+    padding: 9px 0;
+    border: 1.5px solid var(--gray-border);
+    border-radius: var(--radius-sm);
+    background: var(--gray-bg);
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text-sub);
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .pay-method-btn.active {
+    background: #7c4dff;
+    border-color: #7c4dff;
+    color: white;
+  }
+  .card-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--gray-bg);
+    border: 1.5px solid var(--gray-border);
+    border-radius: 14px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-sub);
+  }
+  .card-chip.selected {
+    background: #ede8ff;
+    border-color: #7c4dff;
+    color: #5c35c4;
+    font-weight: 700;
+  }
+  .card-chip-del {
+    font-size: 13px;
+    color: #bbb;
+    cursor: pointer;
+    line-height: 1;
+  }
   .scan-loading {
     display: flex;
     flex-direction: column;
@@ -1872,6 +1913,20 @@
         <label class="form-label">店名（選填）</label>
         <input type="text" id="accStore" class="form-input" placeholder="例：唐吉訶德、松本清">
       </div>
+      <div class="form-group">
+        <label class="form-label">支付方式</label>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button id="payMethodCash" class="pay-method-btn active" onclick="setPayMethod('cash')">💴 現金</button>
+          <button id="payMethodCard" class="pay-method-btn" onclick="setPayMethod('card')">💳 刷卡</button>
+        </div>
+        <div id="cardSelectArea" style="display:none">
+          <div id="cardChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="newCardInput" class="form-input" placeholder="新增卡片（如：台新@GoGo）" style="flex:1">
+            <button onclick="addPaymentCard()" style="background:#7c4dff;color:white;border:none;border-radius:var(--radius-sm);padding:0 14px;font-size:13px;font-weight:700;cursor:pointer">新增</button>
+          </div>
+        </div>
+      </div>
       <div class="acc-modal-scan-row">
         <button class="acc-scan-btn" onclick="startReceiptScan()">📷 掃描收據</button>
         <button class="acc-add-item-btn" onclick="addManualAccItem()">＋ 手動新增</button>
@@ -2413,7 +2468,8 @@ let state = {
   days: [],
   shoppingList: [],
   shopPeople: ['我'],
-  accounting: []
+  accounting: [],
+  paymentCards: []
 };
 
 let currentView = 'home';
@@ -3008,8 +3064,15 @@ function renderAccounting() {
   // Filter by person
   const filtered = accFilterPerson === '全部' ? accounting : accounting.filter(r => r.person === accFilterPerson);
 
-  // price × (1 + taxRate/100)；退稅收據只算原價（不加稅）
-  const withTax = (i) => (i.price || 0) + Math.round((i.price || 0) * (i.taxRate || 0) / 100);
+  // 外稅：price + price×rate/100；含稅：price（稅已包含）
+  const withTax = (i) => {
+    const p = i.price || 0, r = i.taxRate || 0;
+    return i.taxInclusive ? p : p + Math.round(p * r / 100);
+  };
+  const taxOf = (i) => {
+    const p = i.price || 0, r = i.taxRate || 0;
+    return i.taxInclusive ? Math.round(p * r / (100 + r)) : Math.round(p * r / 100);
+  };
   const receiptTotal = (r) => (r.items || []).reduce((s, i) => s + (r.taxRefund ? (i.price||0) : withTax(i)), 0);
   const totalJpy = filtered.reduce((sum, r) => sum + receiptTotal(r), 0);
   document.getElementById('accTotalJpy').textContent = `¥${formatNum(totalJpy)}`;
@@ -3071,16 +3134,20 @@ function renderAccounting() {
       const dateStr = d ? `${d.getMonth()+1}月${d.getDate()}日 (週${WEEKDAYS[d.getDay()]})` : date;
       listHtml += `<div class="section-title">${dateStr}</div>`;
       recs.forEach(r => {
-        const totalTax = (r.items || []).reduce((s, i) => s + Math.round((i.price||0)*(i.taxRate||0)/100), 0);
+        const totalTax = (r.items || []).reduce((s, i) => s + taxOf(i), 0);
         const itemTotal = r.taxRefund
           ? (r.items || []).reduce((s, i) => s + (i.price||0), 0)
           : (r.items || []).reduce((s, i) => s + withTax(i), 0);
         const itemCount = (r.items || []).length;
+        const payBadge = r.paymentMethod === 'card'
+          ? `<span style="font-size:10px;background:#ede8ff;color:#5c35c4;border-radius:8px;padding:1px 6px;margin-left:4px">💳${r.cardName ? ' '+r.cardName : ''}</span>`
+          : `<span style="font-size:10px;background:#f5f5f7;color:#666;border-radius:8px;padding:1px 6px;margin-left:4px">💴現金</span>`;
         const itemsHtml = (r.items || []).map(item => {
           const rate = item.taxRate || 0;
-          const taxAmt = Math.round((item.price || 0) * rate / 100);
-          const priceWithTax = (item.price || 0) + taxAmt;
-          const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(+稅¥${formatNum(taxAmt)})</span>` : '';
+          const taxAmt = taxOf(item);
+          const priceWithTax = withTax(item);
+          const taxLabel = rate > 0 ? (item.taxInclusive ? `含稅¥${formatNum(taxAmt)}` : `+稅¥${formatNum(taxAmt)}`) : '';
+          const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(${taxLabel})</span>` : '';
           return `<div class="acc-item-row">
             <div class="acc-item-name">
               <div class="acc-item-cn">${escHtml(item.name || item.nameJp || '（未命名）')}</div>
@@ -3093,7 +3160,7 @@ function renderAccounting() {
         listHtml += `<div class="acc-entry-card" onclick="openEditReceipt('${r.id}')">
           <div class="acc-entry-header">
             <div>
-              <div class="acc-entry-store">${escHtml(r.store || '購物')}</div>
+              <div class="acc-entry-store">${escHtml(r.store || '購物')}${payBadge}</div>
               <div class="acc-entry-meta">${itemCount} 件商品${r.taxRefund ? ' · <span style="color:#1a7a4a;font-weight:700">🧾 已退稅-¥'+formatNum(totalTax)+'</span>' : (totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : '')}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
             </div>
             <div style="text-align:right">
@@ -3119,6 +3186,59 @@ function setAccPersonFilter(person) {
 }
 
 let accTaxRefund = false;
+let accPayMethod = 'cash';
+let accSelectedCard = '';
+
+function setPayMethod(method) {
+  accPayMethod = method;
+  document.getElementById('payMethodCash').classList.toggle('active', method === 'cash');
+  document.getElementById('payMethodCard').classList.toggle('active', method === 'card');
+  document.getElementById('cardSelectArea').style.display = method === 'card' ? '' : 'none';
+  if (method === 'card') renderCardChips();
+}
+
+function renderCardChips() {
+  const cards = state.paymentCards || [];
+  const container = document.getElementById('cardChips');
+  if (!container) return;
+  if (cards.length === 0) {
+    container.innerHTML = `<span style="font-size:12px;color:var(--gray-text)">尚無卡片，請在下方新增</span>`;
+    return;
+  }
+  container.innerHTML = cards.map((card, i) =>
+    `<span class="card-chip ${accSelectedCard === card ? 'selected' : ''}" onclick="selectCard('${escHtml(card)}')">
+      💳 ${escHtml(card)}
+      <span class="card-chip-del" onclick="event.stopPropagation();deletePaymentCard(${i})">✕</span>
+    </span>`
+  ).join('');
+}
+
+function selectCard(name) {
+  accSelectedCard = name;
+  renderCardChips();
+}
+
+function addPaymentCard() {
+  const input = document.getElementById('newCardInput');
+  const name = input.value.trim();
+  if (!name) return;
+  if (!state.paymentCards) state.paymentCards = [];
+  if (!state.paymentCards.includes(name)) {
+    state.paymentCards.push(name);
+    saveState();
+  }
+  accSelectedCard = name;
+  input.value = '';
+  renderCardChips();
+}
+
+function deletePaymentCard(idx) {
+  if (!state.paymentCards) return;
+  const removed = state.paymentCards.splice(idx, 1)[0];
+  if (accSelectedCard === removed) accSelectedCard = '';
+  saveState();
+  renderCardChips();
+}
 
 function setTaxRefundUI(val) {
   accTaxRefund = val;
@@ -3143,6 +3263,8 @@ function openAddReceipt() {
   document.getElementById('accStore').value = '';
   document.getElementById('accNotes').value = '';
   setTaxRefundUI(false);
+  accSelectedCard = '';
+  setPayMethod('cash');
   accItems = [];
   renderAccModalItems();
   openModal('receiptModal');
@@ -3162,6 +3284,8 @@ function openEditReceipt(id) {
   document.getElementById('accStore').value = receipt.store || '';
   document.getElementById('accNotes').value = receipt.notes || '';
   setTaxRefundUI(receipt.taxRefund || false);
+  accSelectedCard = receipt.cardName || '';
+  setPayMethod(receipt.paymentMethod || 'cash');
   accItems = (receipt.items || []).map(i => ({ ...i }));
   renderAccModalItems();
   openModal('receiptModal');
@@ -3183,11 +3307,14 @@ function renderAccModalItems() {
         <div style="display:flex;gap:6px">
           <select onchange="accItems[${idx}].cat=this.value" style="flex:1">${catOpts}</select>
           <input type="number" placeholder="¥ 金額" value="${item.price || ''}" min="0" oninput="accItems[${idx}].price=parseInt(this.value)||0" style="width:80px">
-          <select onchange="accItems[${idx}].taxRate=parseInt(this.value)" style="width:62px;font-size:12px">
+          <select onchange="accItems[${idx}].taxRate=parseInt(this.value)" style="width:56px;font-size:12px">
             <option value="0" ${item.taxRate===0?'selected':''}>無稅</option>
             <option value="8" ${item.taxRate===8?'selected':''}>8%</option>
             <option value="10" ${(item.taxRate??10)===10?'selected':''}>10%</option>
           </select>
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-sub);white-space:nowrap;cursor:pointer">
+            <input type="checkbox" ${item.taxInclusive?'checked':''} onchange="accItems[${idx}].taxInclusive=this.checked" style="cursor:pointer">含稅
+          </label>
         </div>
       </div>
       <button class="acc-item-remove" onclick="removeAccItem(${idx})">✕</button>
@@ -3297,14 +3424,16 @@ function saveReceipt() {
   const store = document.getElementById('accStore').value.trim();
   const notes = document.getElementById('accNotes').value.trim();
   const taxRefund = accTaxRefund;
+  const paymentMethod = accPayMethod;
+  const cardName = accPayMethod === 'card' ? accSelectedCard : undefined;
   if (!date) { showToast('請選擇日期'); return; }
   if (accItems.length === 0) { showToast('請新增至少一件商品'); return; }
   if (!state.accounting) state.accounting = [];
   if (editingReceiptId) {
     const idx = state.accounting.findIndex(r => r.id === editingReceiptId);
-    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefund, items: [...accItems] };
+    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefund, paymentMethod, cardName, items: [...accItems] };
   } else {
-    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefund, items: [...accItems] });
+    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefund, paymentMethod, cardName, items: [...accItems] });
   }
   saveState();
   closeModal('receiptModal');
