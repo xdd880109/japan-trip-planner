@@ -3064,13 +3064,20 @@ function renderAccounting() {
   // Filter by person
   const filtered = accFilterPerson === '全部' ? accounting : accounting.filter(r => r.person === accFilterPerson);
 
-  // 外稅：price + price×rate/100；含稅：price（稅已包含）
+  // 折扣後的基礎價格
+  const afterDiscount = (i) => {
+    const p = i.price || 0, d = i.discount || 0;
+    if (d <= 0) return p;
+    return i.discountType === 'amt' ? Math.max(0, p - d) : Math.round(p * (100 - d) / 100);
+  };
+  const discountAmt = (i) => (i.price || 0) - afterDiscount(i);
+  // 外稅：折後價 + 稅；含稅：折後價（稅已含）
   const withTax = (i) => {
-    const p = i.price || 0, r = i.taxRate || 0;
+    const p = afterDiscount(i), r = i.taxRate || 0;
     return i.taxInclusive ? p : p + Math.round(p * r / 100);
   };
   const taxOf = (i) => {
-    const p = i.price || 0, r = i.taxRate || 0;
+    const p = afterDiscount(i), r = i.taxRate || 0;
     return i.taxInclusive ? Math.round(p * r / (100 + r)) : Math.round(p * r / 100);
   };
   const receiptTotal = (r) => (r.items || []).reduce((s, i) => s + (r.taxRefund ? (i.price||0) : withTax(i)), 0);
@@ -3144,8 +3151,11 @@ function renderAccounting() {
           : `<span style="font-size:10px;background:#f5f5f7;color:#666;border-radius:8px;padding:1px 6px;margin-left:4px">💴現金</span>`;
         const itemsHtml = (r.items || []).map(item => {
           const rate = item.taxRate || 0;
+          const dAmt = discountAmt(item);
           const taxAmt = taxOf(item);
           const priceWithTax = withTax(item);
+          const discBadge = dAmt > 0
+            ? `<span style="font-size:10px;color:#e05c00;margin-left:3px">折-¥${formatNum(dAmt)}</span>` : '';
           const taxLabel = rate > 0 ? (item.taxInclusive ? `含稅¥${formatNum(taxAmt)}` : `+稅¥${formatNum(taxAmt)}`) : '';
           const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(${taxLabel})</span>` : '';
           return `<div class="acc-item-row">
@@ -3154,7 +3164,7 @@ function renderAccounting() {
               ${item.nameJp && item.name ? `<div class="acc-item-jp">${escHtml(item.nameJp)}</div>` : ''}
             </div>
             <span class="acc-item-cat">${escHtml(item.cat || '雜貨')}${rate > 0 ? ` ${rate}%` : ''}</span>
-            <div class="acc-item-price">¥${formatNum(priceWithTax)}${taxBadge}</div>
+            <div class="acc-item-price">¥${formatNum(priceWithTax)}${discBadge}${taxBadge}</div>
           </div>`;
         }).join('');
         listHtml += `<div class="acc-entry-card" onclick="openEditReceipt('${r.id}')">
@@ -3316,6 +3326,14 @@ function renderAccModalItems() {
             <input type="checkbox" ${item.taxInclusive?'checked':''} onchange="accItems[${idx}].taxInclusive=this.checked" style="cursor:pointer">含稅
           </label>
         </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:11px;color:#e05c00;white-space:nowrap">🏷️ 折扣</span>
+          <input type="number" placeholder="0" min="0" value="${item.discount||''}" oninput="accItems[${idx}].discount=parseFloat(this.value)||0" style="flex:1;border:1px solid var(--gray-border);border-radius:6px;padding:4px 8px;font-size:13px;background:white">
+          <select onchange="accItems[${idx}].discountType=this.value" style="width:46px;font-size:13px;border:1px solid var(--gray-border);border-radius:6px;padding:4px;background:white">
+            <option value="pct" ${(item.discountType||'pct')==='pct'?'selected':''}>%</option>
+            <option value="amt" ${item.discountType==='amt'?'selected':''}>¥</option>
+          </select>
+        </div>
       </div>
       <button class="acc-item-remove" onclick="removeAccItem(${idx})">✕</button>
     </div>`;
@@ -3324,7 +3342,7 @@ function renderAccModalItems() {
 }
 
 function addManualAccItem() {
-  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10 });
+  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10, discount: 0, discountType: 'pct' });
   renderAccModalItems();
 }
 
