@@ -3293,28 +3293,44 @@ function setTaxRefundUI(val) {
 function toggleTaxRefund() {} // no-op, kept for compat
 
 function calcTaxRefund() {
-  // 正確公式：(含稅金額 ÷ (1+稅率)) × (稅率 - 手續費率)
-  // 例：Alpen 收 2% 手續費 → 實際退 8% of 未稅金額
   const feeRate = parseFloat(document.getElementById('refundFeeRate').value) || 2;
-  let totalTax = 0, totalFee = 0;
-  accItems.forEach(i => {
+
+  // 先算商品小計（含稅，含商品折扣）
+  let subtotal = 0;
+  const itemData = accItems.map(i => {
     const p = i.price || 0, d = i.discount || 0;
     const afterD = d > 0 ? (i.discountType === 'amt' ? Math.max(0, p - d) : Math.round(p * (100 - d) / 100)) : p;
     const r = i.taxRate || 0;
+    const taxInc = (r > 0 && !i.taxInclusive) ? afterD + Math.round(afterD * r / 100) : afterD;
+    subtotal += taxInc;
+    return { taxInc, r };
+  });
+
+  // 套上優惠券（收據層）
+  const cpnV = parseFloat(document.getElementById('couponValue')?.value) || 0;
+  const cpnT = document.getElementById('couponType')?.value || 'amt';
+  const cpnAmt = cpnV > 0 ? (cpnT === 'pct' ? Math.round(subtotal * cpnV / 100) : cpnV) : 0;
+  const finalTotal = Math.max(0, subtotal - cpnAmt);
+  const ratio = subtotal > 0 ? finalTotal / subtotal : 1;
+
+  // 按比例縮小每個項目的含稅金額，再計算退稅
+  let totalTax = 0, totalFee = 0;
+  itemData.forEach(({ taxInc, r }) => {
     if (r <= 0) return;
-    // 含稅金額
-    const taxInc = i.taxInclusive ? afterD : afterD + Math.round(afterD * r / 100);
-    // 預稅金額
-    const preTax = Math.round(taxInc * 100 / (100 + r));
-    const tax = taxInc - preTax;
-    const fee = Math.round(preTax * feeRate / 100);
+    const adjusted = taxInc * ratio;
+    const preTax = adjusted * 100 / (100 + r);
+    const tax = adjusted - preTax;
+    const fee = preTax * feeRate / 100;
     totalTax += tax;
     totalFee += fee;
   });
+  totalTax = Math.round(totalTax);
+  totalFee = Math.round(totalFee);
   const refund = Math.max(0, totalTax - totalFee);
   document.getElementById('taxRefundAmount').value = refund;
+  const cpnNote = cpnAmt > 0 ? ` (已含優惠券-¥${formatNum(cpnAmt)})` : '';
   document.getElementById('refundCalcHint').textContent =
-    `消費稅¥${formatNum(totalTax)} − 手續費¥${formatNum(totalFee)}(${feeRate}%未稅) = 退稅¥${formatNum(refund)}`;
+    `消費稅¥${formatNum(totalTax)}${cpnNote} − 手續費¥${formatNum(totalFee)}(${feeRate}%) = 退稅¥${formatNum(refund)}`;
 }
 
 function openAddReceipt() {
