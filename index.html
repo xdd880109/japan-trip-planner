@@ -3163,13 +3163,14 @@ function renderAccounting() {
       listHtml += `<div class="section-title">${dateStr}</div>`;
       recs.forEach(r => {
         const totalTax = (r.items || []).reduce((s, i) => s + taxOf(i), 0);
-        const itemTotal = r.taxRefund
+        const subtotal = r.taxRefund
           ? (r.items || []).reduce((s, i) => s + (i.price||0), 0)
           : (r.items || []).reduce((s, i) => s + withTax(i), 0);
-        const itemCount = (r.items || []).length;
         const cpnAmt = couponDiscount(r);
+        const finalTotal = Math.max(0, subtotal - cpnAmt);
+        const itemCount = (r.items || []).length;
         const cpnBadge = cpnAmt > 0
-          ? `<span style="font-size:11px;color:#c05c00;font-weight:600"> 🎫-¥${formatNum(cpnAmt)}</span>` : '';
+          ? `<div style="font-size:11px;color:#c05c00;text-align:right">小計¥${formatNum(subtotal)} 🎫-¥${formatNum(cpnAmt)}</div>` : '';
         const payBadge = r.paymentMethod === 'card'
           ? `<span style="font-size:10px;background:#ede8ff;color:#5c35c4;border-radius:8px;padding:1px 6px;margin-left:4px">💳${r.cardName ? ' '+r.cardName : ''}</span>`
           : `<span style="font-size:10px;background:#f5f5f7;color:#666;border-radius:8px;padding:1px 6px;margin-left:4px">💴現金</span>`;
@@ -3198,7 +3199,8 @@ function renderAccounting() {
               <div class="acc-entry-meta">${itemCount} 件商品${r.taxRefund ? ' · <span style="color:#1a7a4a;font-weight:700">🧾 已退稅-¥'+formatNum(totalTax)+'</span>' : (totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : '')}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
             </div>
             <div style="text-align:right">
-              <div class="acc-entry-total">¥${formatNum(itemTotal)}${cpnBadge}</div>
+              ${cpnBadge}
+              <div class="acc-entry-total">¥${formatNum(finalTotal)}</div>
               <div class="acc-entry-person">${escHtml(r.person || '我')}</div>
             </div>
           </div>
