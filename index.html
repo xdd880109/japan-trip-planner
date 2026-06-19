@@ -3104,7 +3104,7 @@ function renderAccounting() {
     const subtotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
     const cv = r.couponValue || 0;
     if (cv <= 0) return 0;
-    return r.couponType === 'pct' ? Math.round(subtotal * cv / 100) : cv;
+    return r.couponType === 'pct' ? Math.floor(subtotal * cv / 100) : cv;
   };
   const receiptTotal = (r) => {
     const subtotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
@@ -3340,7 +3340,10 @@ function openAddReceipt() {
   const today = new Date();
   document.getElementById('accDate').value = today.toISOString().slice(0, 10);
   const personSel = document.getElementById('accPerson');
-  personSel.innerHTML = (state.shopPeople || ['我']).map(p => `<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
+  const defaultPerson = (accFilterPerson !== '全部') ? accFilterPerson : (state.shopPeople?.[0] || '我');
+  personSel.innerHTML = (state.shopPeople || ['我']).map(p =>
+    `<option value="${escHtml(p)}" ${p === defaultPerson ? 'selected' : ''}>${escHtml(p)}</option>`
+  ).join('');
   document.getElementById('accStore').value = '';
   document.getElementById('accNotes').value = '';
   setTaxRefundUI(0);
