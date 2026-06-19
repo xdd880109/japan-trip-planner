@@ -3088,17 +3088,17 @@ function renderAccounting() {
   const afterDiscount = (i) => {
     const p = i.price || 0, d = i.discount || 0;
     if (d <= 0) return p;
-    return i.discountType === 'amt' ? Math.max(0, p - d) : Math.round(p * (100 - d) / 100);
+    return i.discountType === 'amt' ? Math.max(0, p - d) : Math.floor(p * (100 - d) / 100);
   };
   const discountAmt = (i) => (i.price || 0) - afterDiscount(i);
   // 外稅：折後價 + 稅；含稅：折後價（稅已含）
   const withTax = (i) => {
     const p = afterDiscount(i), r = i.taxRate || 0;
-    return i.taxInclusive ? p : p + Math.round(p * r / 100);
+    return i.taxInclusive ? p : p + Math.floor(p * r / 100);
   };
   const taxOf = (i) => {
     const p = afterDiscount(i), r = i.taxRate || 0;
-    return i.taxInclusive ? Math.round(p * r / (100 + r)) : Math.round(p * r / 100);
+    return i.taxInclusive ? Math.floor(p * r / (100 + r)) : Math.floor(p * r / 100);
   };
   const couponDiscount = (r) => {
     const subtotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
@@ -3299,9 +3299,9 @@ function calcTaxRefund() {
   let subtotal = 0;
   const itemData = accItems.map(i => {
     const p = i.price || 0, d = i.discount || 0;
-    const afterD = d > 0 ? (i.discountType === 'amt' ? Math.max(0, p - d) : Math.round(p * (100 - d) / 100)) : p;
+    const afterD = d > 0 ? (i.discountType === 'amt' ? Math.max(0, p - d) : Math.floor(p * (100 - d) / 100)) : p;
     const r = i.taxRate || 0;
-    const taxInc = (r > 0 && !i.taxInclusive) ? afterD + Math.round(afterD * r / 100) : afterD;
+    const taxInc = (r > 0 && !i.taxInclusive) ? afterD + Math.floor(afterD * r / 100) : afterD;
     subtotal += taxInc;
     return { taxInc, r };
   });
