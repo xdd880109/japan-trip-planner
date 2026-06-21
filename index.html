@@ -1641,14 +1641,14 @@
     border-color: #1a73e8;
     color: #fff;
   }
-  .shop-person-chip .chip-x {
+  .shop-person-chip .chip-x, .acc-person-chip .chip-x {
     font-size: 12px;
     opacity: .65;
     line-height: 1;
     margin-left: 1px;
     cursor: pointer;
   }
-  .shop-person-chip.active .chip-x { opacity: .85; }
+  .shop-person-chip.active .chip-x, .acc-person-chip.active .chip-x { opacity: .95; }
   .shop-add-person-btn {
     flex-shrink: 0;
     padding: 5px 14px;
@@ -3150,17 +3150,13 @@ function renderAccounting() {
   const accounting = state.accounting || [];
   const shopPeople = state.shopPeople || ['我'];
 
-  // Person filter chips：只顯示「有付過錢的人」（真正的同行者），代購/送禮對象不顯示
-  const payers = [...new Set(accounting.map(r => r.person || '我'))];
-  // 確保 shopPeople 順序，並至少包含目前篩選的人
-  const companions = (shopPeople.filter(p => payers.includes(p)));
-  if (companions.length === 0) companions.push(shopPeople[0] || '我');
-  if (accFilterPerson !== '全部' && !companions.includes(accFilterPerson)) companions.push(accFilterPerson);
-  const persons = ['全部', ...companions];
-  const chipsHtml = persons.map(p =>
-    `<span class="acc-person-chip ${accFilterPerson === p ? 'active' : ''}" onclick="setAccPersonFilter('${escHtml(p)}')">${escHtml(p)}</span>`
+  // Person filter chips（含改名 ✎ / 刪除 ✕ / 新增 ＋）
+  const allChip = `<span class="acc-person-chip ${accFilterPerson === '全部' ? 'active' : ''}" onclick="setAccPersonFilter('全部')">全部</span>`;
+  const personChips = shopPeople.map(p =>
+    `<span class="acc-person-chip ${accFilterPerson === p ? 'active' : ''}" onclick="setAccPersonFilter('${escHtml(p)}')">${escHtml(p)}<span class="chip-x" onclick="event.stopPropagation();renameMember('${escHtml(p)}')" style="margin-left:5px">✎</span><span class="chip-x" onclick="event.stopPropagation();removeMember('${escHtml(p)}')">✕</span></span>`
   ).join('');
-  document.getElementById('accPersonChips').innerHTML = chipsHtml;
+  const addChip = `<span class="acc-person-chip" style="border-style:dashed" onclick="addMember()">＋ 成員</span>`;
+  document.getElementById('accPersonChips').innerHTML = allChip + personChips + addChip;
 
   // Filter by person
   const filtered = accFilterPerson === '全部' ? accounting : accounting.filter(r => r.person === accFilterPerson);
@@ -4945,16 +4941,63 @@ function renameShopPerson(oldName) {
       if (Array.isArray(it.owners)) it.owners = it.owners.map(o => o === oldName ? n : o);
     });
   });
-  // 更新還款記錄
-  if (state.accSettled && state.accSettled[oldName] !== undefined) {
-    state.accSettled[n] = state.accSettled[oldName];
-    delete state.accSettled[oldName];
+  // 更新還款記錄（key 是 "債務人>債權人" 格式）
+  if (state.accSettled) {
+    const newSettled = {};
+    Object.keys(state.accSettled).forEach(k => {
+      const nk = k.split('>').map(p => p === oldName ? n : p).join('>');
+      newSettled[nk] = state.accSettled[k];
+    });
+    state.accSettled = newSettled;
   }
   if (currentShopPerson === oldName) currentShopPerson = n;
   if (accFilterPerson === oldName) accFilterPerson = n;
   saveState();
-  renderShoppingView();
+  refreshMemberViews();
   showToast(`已改名為「${n}」✓`);
+}
+
+// ── 通用成員管理（記帳/清單共用，會刷新兩個畫面）──
+function refreshMemberViews() {
+  if (document.getElementById('shoppingView')?.classList.contains('active')) renderShoppingView();
+  if (document.getElementById('accountingView')?.classList.contains('active')) renderAccounting();
+}
+function renameMember(name) { renameShopPerson(name); }
+function removeMember(person) {
+  if (!confirm(`刪除成員「${person}」嗎？\n（相關項目會改歸「${state.shopPeople[0]||'我'}」）`)) return;
+  const fallback = state.shopPeople.find(p => p !== person) || '我';
+  (state.shoppingList || []).forEach(item => {
+    if ((item.person || '我') === person) item.person = fallback;
+    if (item.recipient === person) item.recipient = undefined;
+  });
+  (state.accounting || []).forEach(r => {
+    if ((r.person || '我') === person) r.person = fallback;
+    (r.items || []).forEach(it => {
+      if (it.owner === person) it.owner = fallback;
+      if (Array.isArray(it.owners)) {
+        it.owners = it.owners.map(o => o === person ? fallback : o);
+        it.owners = [...new Set(it.owners)];
+      }
+    });
+  });
+  state.shopPeople = state.shopPeople.filter(p => p !== person);
+  if (state.shopPeople.length === 0) state.shopPeople = ['我'];
+  if (currentShopPerson === person) currentShopPerson = '全部';
+  if (accFilterPerson === person) accFilterPerson = '全部';
+  saveState();
+  refreshMemberViews();
+  showToast(`已刪除「${person}」`);
+}
+function addMember() {
+  const name = prompt('新增成員名稱：');
+  if (!name || !name.trim()) return;
+  const n = name.trim();
+  if (!state.shopPeople) state.shopPeople = ['我'];
+  if (state.shopPeople.includes(n)) { showToast('已有這個成員'); return; }
+  state.shopPeople.push(n);
+  saveState();
+  refreshMemberViews();
+  showToast(`已新增成員「${n}」`);
 }
 
 // ── Modal：開啟 / 編輯 ──
