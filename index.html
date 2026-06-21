@@ -3307,47 +3307,79 @@ function renderAccounting() {
     });
   }
 
-  // 💰 欠款統計：把所有收據的分帳彙總
-  const debtMap = {}; // person → { jpy, settled }
-  const payer = accFilterPerson !== '全部' ? accFilterPerson : null;
-  filtered.forEach(r => {
-    const receiptPayer = r.person || '我';
+  // 💰 欠款統計：用「誰欠誰」雙向計算（用全部收據，不受人員篩選影響）
+  const pair = {}; // `${debtor}>${creditor}` => 金額（debtor 欠 creditor）
+  (state.accounting || []).forEach(r => {
+    const payerP = r.person || '我';
     const items = r.items || [];
     const subtotalAll = items.reduce((s,i) => s + withTax(i), 0);
     const cpnA = couponDiscount(r);
     const refA = r.taxRefundAmount || 0;
-    const net = Math.max(0, subtotalAll - cpnA - refA);
-    const ratio = subtotalAll > 0 ? net / subtotalAll : 1;
+    const netR = Math.max(0, subtotalAll - cpnA - refA);
+    const ratio = subtotalAll > 0 ? netR / subtotalAll : 1;
     items.forEach(item => {
-      const own = item.owner || receiptPayer;
-      if (own === receiptPayer) return; // 付款人自己的不算
-      if (!debtMap[own]) debtMap[own] = 0;
-      debtMap[own] += Math.floor(withTax(item) * ratio);
+      const owner = item.owner || payerP;
+      if (owner === payerP) return; // 付款人自己的不算
+      const amt = Math.floor(withTax(item) * ratio);
+      const key = `${owner}>${payerP}`;
+      pair[key] = (pair[key] || 0) + amt;
     });
   });
+  // 相互抵銷（A欠B 和 B欠A 互扣）
+  const netPair = {};
+  const seenPair = new Set();
+  Object.keys(pair).forEach(key => {
+    if (seenPair.has(key)) return;
+    const [a, b] = key.split('>');
+    const rev = `${b}>${a}`;
+    seenPair.add(key); seenPair.add(rev);
+    const diff = (pair[key] || 0) - (pair[rev] || 0);
+    if (diff > 0) netPair[`${a}>${b}`] = diff;
+    else if (diff < 0) netPair[`${b}>${a}`] = -diff;
+  });
   const settled = state.accSettled || {};
-  const debtPeople = Object.keys(debtMap);
+  // 依篩選人員決定要顯示哪些關係
+  const me = accFilterPerson !== '全部' ? accFilterPerson : null;
+  const pairKeys = Object.keys(netPair).filter(k => {
+    if (!me) return true;
+    const [a, b] = k.split('>');
+    return a === me || b === me;
+  });
   let debtHtml = '';
-  if (debtPeople.length > 0) {
-    let unsettledTotal = 0;
-    const rows = debtPeople.map(p => {
-      const jpy = debtMap[p];
-      const isDone = !!settled[p];
-      if (!isDone) unsettledTotal += jpy;
+  if (pairKeys.length > 0) {
+    let owedToMe = 0, iOwe = 0;
+    const rows = pairKeys.map(k => {
+      const [debtor, creditor] = k.split('>');
+      const amt = netPair[k];
+      const isDone = !!settled[k];
+      let label, dir;
+      if (me) {
+        if (creditor === me) { label = `${debtor} 欠你`; dir = 'in'; if (!isDone) owedToMe += amt; }
+        else { label = `你欠 ${creditor}`; dir = 'out'; if (!isDone) iOwe += amt; }
+      } else {
+        label = `${debtor} → ${creditor}`; dir = 'in'; if (!isDone) owedToMe += amt;
+      }
+      const color = dir === 'out' ? '#1a7a4a' : '#c00';
       return `<div class="debt-row ${isDone ? 'debt-settled' : ''}">
-        <div class="debt-person">👤 ${escHtml(p)}</div>
+        <div class="debt-person">👤 ${escHtml(label)}</div>
         <div style="display:flex;align-items:center;gap:10px">
-          <div class="debt-amount">
-            <div class="debt-jpy">¥${formatNum(jpy)}</div>
-          </div>
-          <button class="debt-settle-btn ${isDone?'done':''}" onclick="toggleDebtSettled('${escHtml(p)}')">${isDone?'✓ 已還':'標記還清'}</button>
+          <div class="debt-jpy" style="color:${color}">¥${formatNum(amt)}</div>
+          <button class="debt-settle-btn ${isDone?'done':''}" onclick="toggleDebtSettled('${escHtml(k)}')">${isDone?'✓ 已結':'標記結清'}</button>
         </div>
       </div>`;
     }).join('');
-    const totalRow = `<div class="debt-row" style="background:#fff4f4;border-top:2px solid var(--gray-border)">
-      <div class="debt-person">💴 未收回合計</div>
-      <div class="debt-jpy" style="font-size:16px">¥${formatNum(unsettledTotal)}</div>
-    </div>`;
+    let totalRow = '';
+    if (me) {
+      totalRow = `<div class="debt-row" style="background:#f7f7fa;border-top:2px solid var(--gray-border);flex-direction:column;align-items:stretch;gap:4px">
+        ${owedToMe > 0 ? `<div style="display:flex;justify-content:space-between"><span>💴 別人欠你合計</span><span class="debt-jpy">¥${formatNum(owedToMe)}</span></div>` : ''}
+        ${iOwe > 0 ? `<div style="display:flex;justify-content:space-between"><span>💸 你欠別人合計</span><span class="debt-jpy" style="color:#1a7a4a">¥${formatNum(iOwe)}</span></div>` : ''}
+      </div>`;
+    } else {
+      totalRow = `<div class="debt-row" style="background:#fff4f4;border-top:2px solid var(--gray-border)">
+        <div class="debt-person">💴 未結清合計</div>
+        <div class="debt-jpy" style="font-size:16px">¥${formatNum(owedToMe)}</div>
+      </div>`;
+    }
     debtHtml = `<div class="section-title">💰 代購 / 墊款統計</div>
     <div class="debt-card">${rows}${totalRow}</div>`;
   }
