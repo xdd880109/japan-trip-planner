@@ -3150,8 +3150,13 @@ function renderAccounting() {
   const accounting = state.accounting || [];
   const shopPeople = state.shopPeople || ['我'];
 
-  // Person filter chips
-  const persons = ['全部', ...shopPeople];
+  // Person filter chips：只顯示「有付過錢的人」（真正的同行者），代購/送禮對象不顯示
+  const payers = [...new Set(accounting.map(r => r.person || '我'))];
+  // 確保 shopPeople 順序，並至少包含目前篩選的人
+  const companions = (shopPeople.filter(p => payers.includes(p)));
+  if (companions.length === 0) companions.push(shopPeople[0] || '我');
+  if (accFilterPerson !== '全部' && !companions.includes(accFilterPerson)) companions.push(accFilterPerson);
+  const persons = ['全部', ...companions];
   const chipsHtml = persons.map(p =>
     `<span class="acc-person-chip ${accFilterPerson === p ? 'active' : ''}" onclick="setAccPersonFilter('${escHtml(p)}')">${escHtml(p)}</span>`
   ).join('');
