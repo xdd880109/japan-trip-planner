@@ -3129,6 +3129,20 @@ function renderDayView() {
 // ===== ACCOUNTING =====
 const ACC_CATS = ['美妝','食物','服飾','交通','住宿','黑膠','雜貨'];
 let editingReceiptId = null;
+
+// 商品擁有者：支援單人(owner)或多人均分(owners)
+function getItemOwners(item) {
+  if (Array.isArray(item.owners) && item.owners.length > 0) return item.owners;
+  if (item.owner) return [item.owner];
+  return [state.shopPeople?.[0] || '我'];
+}
+// 商品折扣後 + 稅 的金額（全域版，給 modal 用）
+function itemWithTax(item) {
+  const p = item.price || 0, d = item.discount || 0;
+  const afterD = d > 0 ? (item.discountType === 'amt' ? Math.max(0, p - d) : Math.floor(p * (100 - d) / 100)) : p;
+  const r = item.taxRate || 0;
+  return item.taxInclusive ? afterD : afterD + Math.floor(afterD * r / 100);
+}
 let accFilterPerson = '全部';
 let accItems = [];
 
@@ -3261,7 +3275,14 @@ function renderAccounting() {
               ${item.nameJp && item.name ? `<div class="acc-item-jp">${escHtml(item.nameJp)}</div>` : ''}
             </div>
             <span class="acc-item-cat">${escHtml(item.cat || '雜貨')}${rate > 0 ? ` ${rate}%` : ''}</span>
-            ${item.owner && item.owner !== (r.person||'我') ? `<span style="font-size:10px;background:#ede8ff;color:#5c35c4;border-radius:8px;padding:1px 6px">👤${escHtml(item.owner)}</span>` : ''}
+            ${(() => {
+              const ow = getItemOwners(item);
+              const isShared = ow.length > 1;
+              const showOwn = isShared || (ow[0] !== (r.person||'我'));
+              if (!showOwn) return '';
+              const label = isShared ? `👥${ow.join('/')}` : `👤${ow[0]}`;
+              return `<span style="font-size:10px;background:#ede8ff;color:#5c35c4;border-radius:8px;padding:1px 6px">${escHtml(label)}</span>`;
+            })()}
             <div class="acc-item-price">¥${formatNum(priceWithTax)}${discBadge}${taxBadge}</div>
           </div>`;
         }).join('');
@@ -3279,12 +3300,15 @@ function renderAccounting() {
           </div>
           ${itemsHtml ? `<div class="acc-entry-items">${itemsHtml}</div>` : ''}
           ${(() => {
-            // 分帳明細：按 owner 彙總
+            // 分帳明細：按 owner 彙總（多人均分）
             const ownerTotals = {};
             (r.items||[]).forEach(item => {
-              const own = item.owner || r.person || '我';
-              if (!ownerTotals[own]) ownerTotals[own] = 0;
-              ownerTotals[own] += withTax(item);
+              const ow = getItemOwners(item);
+              const share = Math.floor(withTax(item) / ow.length);
+              ow.forEach(own => {
+                if (!ownerTotals[own]) ownerTotals[own] = 0;
+                ownerTotals[own] += share;
+              });
             });
             const owners = Object.keys(ownerTotals);
             if (owners.length <= 1) return '';
@@ -3318,11 +3342,14 @@ function renderAccounting() {
     const netR = Math.max(0, subtotalAll - cpnA - refA);
     const ratio = subtotalAll > 0 ? netR / subtotalAll : 1;
     items.forEach(item => {
-      const owner = item.owner || payerP;
-      if (owner === payerP) return; // 付款人自己的不算
-      const amt = Math.floor(withTax(item) * ratio);
-      const key = `${owner}>${payerP}`;
-      pair[key] = (pair[key] || 0) + amt;
+      const owners = getItemOwners(item);
+      const totalAmt = Math.floor(withTax(item) * ratio);
+      const share = Math.floor(totalAmt / owners.length); // 每人均分
+      owners.forEach(owner => {
+        if (owner === payerP) return; // 付款人自己那份不算
+        const key = `${owner}>${payerP}`;
+        pair[key] = (pair[key] || 0) + share;
+      });
     });
   });
   // 相互抵銷（A欠B 和 B欠A 互扣）
@@ -3588,13 +3615,24 @@ function renderAccModalItems() {
             <option value="amt" ${item.discountType==='amt'?'selected':''}>¥</option>
           </select>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:11px;color:#7c4dff;white-space:nowrap">👤 誰的</span>
-          <select onchange="accItems[${idx}].owner=this.value" style="flex:1;border:1px solid var(--gray-border);border-radius:6px;padding:4px 8px;font-size:13px;background:white">
-            ${(state.shopPeople||['我']).map(p=>`<option value="${escHtml(p)}" ${(item.owner||state.shopPeople?.[0]||'我')===p?'selected':''}>${escHtml(p)}</option>`).join('')}
-          </select>
-          <button onclick="addPersonForItem(${idx})" style="width:30px;height:30px;border:1px solid #d8b4fe;background:#f0e6ff;color:#7c4dff;border-radius:6px;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0">＋</button>
+        <div style="display:flex;gap:6px;align-items:flex-start">
+          <span style="font-size:11px;color:#7c4dff;white-space:nowrap;padding-top:5px">👤 誰的</span>
+          <div style="flex:1;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+            ${(() => {
+              const owners = getItemOwners(item);
+              return (state.shopPeople||['我']).map(p => {
+                const on = owners.includes(p);
+                return `<span onclick="toggleItemOwner(${idx},'${escHtml(p)}')" style="font-size:12px;padding:3px 9px;border-radius:12px;cursor:pointer;border:1px solid ${on?'#7c4dff':'var(--gray-border)'};background:${on?'#ede8ff':'#fff'};color:${on?'#5c35c4':'var(--text-sub)'};font-weight:${on?'700':'400'}">${escHtml(p)}</span>`;
+              }).join('') + `<button onclick="addPersonForItem(${idx})" style="width:24px;height:24px;border:1px solid #d8b4fe;background:#f0e6ff;color:#7c4dff;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">＋</button>`;
+            })()}
+          </div>
         </div>
+        ${(() => {
+          const owners = getItemOwners(item);
+          if (owners.length <= 1) return '';
+          const each = Math.floor(itemWithTax(item) / owners.length);
+          return `<div style="font-size:11px;color:#7c4dff;padding-left:42px">👥 ${owners.length} 人均分，每人約 ¥${formatNum(each)}</div>`;
+        })()}
       </div>
       <div class="acc-item-actions">
         <button class="acc-item-move" onclick="moveAccItem(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
@@ -3607,7 +3645,7 @@ function renderAccModalItems() {
 }
 
 function addManualAccItem() {
-  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10, discount: 0, discountType: 'pct', owner: state.shopPeople?.[0] || '我' });
+  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10, discount: 0, discountType: 'pct', owners: [state.shopPeople?.[0] || '我'] });
   renderAccModalItems();
 }
 
@@ -3623,6 +3661,22 @@ function moveAccItem(idx, dir) {
   renderAccModalItems();
 }
 
+function toggleItemOwner(idx, person) {
+  const item = accItems[idx];
+  let owners = getItemOwners(item).slice();
+  if (owners.includes(person)) {
+    if (owners.length === 1) return; // 至少要有一個
+    owners = owners.filter(p => p !== person);
+  } else {
+    owners.push(person);
+  }
+  // 依成員清單順序排列
+  owners = (state.shopPeople || ['我']).filter(p => owners.includes(p));
+  item.owners = owners;
+  delete item.owner; // 統一用 owners
+  renderAccModalItems();
+}
+
 function addPersonForItem(idx) {
   const name = prompt('新增成員名稱：');
   if (!name || !name.trim()) return;
@@ -3632,7 +3686,8 @@ function addPersonForItem(idx) {
     state.shopPeople.push(trimmed);
     saveState();
   }
-  accItems[idx].owner = trimmed;
+  accItems[idx].owners = [trimmed];
+  delete accItems[idx].owner;
   renderAccModalItems();
   showToast(`已新增成員「${trimmed}」`);
 }
@@ -4880,7 +4935,10 @@ function renameShopPerson(oldName) {
   // 更新記帳：付款人 + 商品 owner
   (state.accounting || []).forEach(r => {
     if ((r.person || '我') === oldName) r.person = n;
-    (r.items || []).forEach(it => { if (it.owner === oldName) it.owner = n; });
+    (r.items || []).forEach(it => {
+      if (it.owner === oldName) it.owner = n;
+      if (Array.isArray(it.owners)) it.owners = it.owners.map(o => o === oldName ? n : o);
+    });
   });
   // 更新還款記錄
   if (state.accSettled && state.accSettled[oldName] !== undefined) {
