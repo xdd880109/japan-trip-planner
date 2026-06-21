@@ -3199,6 +3199,7 @@ function renderAccounting() {
               ${item.nameJp && item.name ? `<div class="acc-item-jp">${escHtml(item.nameJp)}</div>` : ''}
             </div>
             <span class="acc-item-cat">${escHtml(item.cat || '雜貨')}${rate > 0 ? ` ${rate}%` : ''}</span>
+            ${item.owner && item.owner !== (r.person||'我') ? `<span style="font-size:10px;background:#ede8ff;color:#5c35c4;border-radius:8px;padding:1px 6px">👤${escHtml(item.owner)}</span>` : ''}
             <div class="acc-item-price">¥${formatNum(priceWithTax)}${discBadge}${taxBadge}</div>
           </div>`;
         }).join('');
@@ -3215,6 +3216,30 @@ function renderAccounting() {
             </div>
           </div>
           ${itemsHtml ? `<div class="acc-entry-items">${itemsHtml}</div>` : ''}
+          ${(() => {
+            // 分帳明細：按 owner 彙總
+            const ownerTotals = {};
+            (r.items||[]).forEach(item => {
+              const own = item.owner || r.person || '我';
+              if (!ownerTotals[own]) ownerTotals[own] = 0;
+              ownerTotals[own] += withTax(item);
+            });
+            const owners = Object.keys(ownerTotals);
+            if (owners.length <= 1) return '';
+            // 套比例優惠券＋退稅
+            const subtotalAll = Object.values(ownerTotals).reduce((a,b)=>a+b,0);
+            const deductRatio = subtotalAll > 0 ? finalTotal / subtotalAll : 1;
+            const rows = owners.map(o => {
+              const amt = Math.floor(ownerTotals[o] * deductRatio);
+              return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">
+                <span>👤 ${escHtml(o)}</span><span style="font-weight:700">¥${formatNum(amt)}</span>
+              </div>`;
+            }).join('');
+            return `<div style="border-top:1px dashed var(--gray-border);padding:8px 16px;background:#f9f7ff">
+              <div style="font-size:11px;color:#7c4dff;font-weight:700;margin-bottom:4px">💜 分帳明細</div>
+              ${rows}
+            </div>`;
+          })()}
         </div>`;
       });
     });
@@ -3412,6 +3437,12 @@ function renderAccModalItems() {
             <option value="amt" ${item.discountType==='amt'?'selected':''}>¥</option>
           </select>
         </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:11px;color:#7c4dff;white-space:nowrap">👤 誰的</span>
+          <select onchange="accItems[${idx}].owner=this.value" style="flex:1;border:1px solid var(--gray-border);border-radius:6px;padding:4px 8px;font-size:13px;background:white">
+            ${(state.shopPeople||['我']).map(p=>`<option value="${escHtml(p)}" ${(item.owner||state.shopPeople?.[0]||'我')===p?'selected':''}>${escHtml(p)}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <button class="acc-item-remove" onclick="removeAccItem(${idx})">✕</button>
     </div>`;
@@ -3420,7 +3451,7 @@ function renderAccModalItems() {
 }
 
 function addManualAccItem() {
-  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10, discount: 0, discountType: 'pct' });
+  accItems.push({ id: 'item_' + Date.now(), name: '', nameJp: '', price: 0, cat: '雜貨', taxRate: 10, discount: 0, discountType: 'pct', owner: state.shopPeople?.[0] || '我' });
   renderAccModalItems();
 }
 
