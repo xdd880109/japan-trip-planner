@@ -822,7 +822,6 @@
   .debt-person { font-weight: 600; }
   .debt-amount { text-align: right; }
   .debt-jpy { font-size: 14px; font-weight: 700; color: #c00; }
-  .debt-twd { font-size: 11px; color: var(--text-sub); margin-top: 1px; }
   .debt-settled { opacity: 0.4; text-decoration: line-through; }
   .debt-settle-btn {
     font-size: 11px;
@@ -3327,27 +3326,30 @@ function renderAccounting() {
     });
   });
   const settled = state.accSettled || {};
-  const TWD_PER_JPY = TWD_RATE; // 1 JPY in TWD
   const debtPeople = Object.keys(debtMap);
   let debtHtml = '';
   if (debtPeople.length > 0) {
+    let unsettledTotal = 0;
     const rows = debtPeople.map(p => {
       const jpy = debtMap[p];
-      const twd = Math.round(jpy / TWD_RATE);
       const isDone = !!settled[p];
+      if (!isDone) unsettledTotal += jpy;
       return `<div class="debt-row ${isDone ? 'debt-settled' : ''}">
         <div class="debt-person">👤 ${escHtml(p)}</div>
         <div style="display:flex;align-items:center;gap:10px">
           <div class="debt-amount">
             <div class="debt-jpy">¥${formatNum(jpy)}</div>
-            <div class="debt-twd">≈ NT$${formatNum(twd)}</div>
           </div>
           <button class="debt-settle-btn ${isDone?'done':''}" onclick="toggleDebtSettled('${escHtml(p)}')">${isDone?'✓ 已還':'標記還清'}</button>
         </div>
       </div>`;
     }).join('');
+    const totalRow = `<div class="debt-row" style="background:#fff4f4;border-top:2px solid var(--gray-border)">
+      <div class="debt-person">💴 未收回合計</div>
+      <div class="debt-jpy" style="font-size:16px">¥${formatNum(unsettledTotal)}</div>
+    </div>`;
     debtHtml = `<div class="section-title">💰 代購 / 墊款統計</div>
-    <div class="debt-card">${rows}</div>`;
+    <div class="debt-card">${rows}${totalRow}</div>`;
   }
 
   document.getElementById('accBody').innerHTML =
