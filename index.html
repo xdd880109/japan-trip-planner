@@ -732,6 +732,27 @@
     line-height: 1;
     flex-shrink: 0;
   }
+  .acc-item-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .acc-item-move {
+    background: var(--gray-bg);
+    border: 1px solid var(--gray-border);
+    color: var(--text-sub);
+    font-size: 11px;
+    width: 26px;
+    height: 22px;
+    border-radius: 5px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+  .acc-item-move:disabled { opacity: 0.3; cursor: default; }
+  .acc-item-move:active:not(:disabled) { background: #e8d5ff; }
   .pay-method-btn {
     flex: 1;
     padding: 9px 0;
@@ -3534,9 +3555,14 @@ function renderAccModalItems() {
           <select onchange="accItems[${idx}].owner=this.value" style="flex:1;border:1px solid var(--gray-border);border-radius:6px;padding:4px 8px;font-size:13px;background:white">
             ${(state.shopPeople||['我']).map(p=>`<option value="${escHtml(p)}" ${(item.owner||state.shopPeople?.[0]||'我')===p?'selected':''}>${escHtml(p)}</option>`).join('')}
           </select>
+          <button onclick="addPersonForItem(${idx})" style="width:30px;height:30px;border:1px solid #d8b4fe;background:#f0e6ff;color:#7c4dff;border-radius:6px;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0">＋</button>
         </div>
       </div>
-      <button class="acc-item-remove" onclick="removeAccItem(${idx})">✕</button>
+      <div class="acc-item-actions">
+        <button class="acc-item-move" onclick="moveAccItem(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
+        <button class="acc-item-move" onclick="moveAccItem(${idx},1)" ${idx===accItems.length-1?'disabled':''}>▼</button>
+        <button class="acc-item-remove" onclick="removeAccItem(${idx})">✕</button>
+      </div>
     </div>`;
   });
   document.getElementById('accModalItems').innerHTML = html;
@@ -3550,6 +3576,27 @@ function addManualAccItem() {
 function removeAccItem(idx) {
   accItems.splice(idx, 1);
   renderAccModalItems();
+}
+
+function moveAccItem(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= accItems.length) return;
+  [accItems[idx], accItems[newIdx]] = [accItems[newIdx], accItems[idx]];
+  renderAccModalItems();
+}
+
+function addPersonForItem(idx) {
+  const name = prompt('新增成員名稱：');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if (!state.shopPeople) state.shopPeople = ['我'];
+  if (!state.shopPeople.includes(trimmed)) {
+    state.shopPeople.push(trimmed);
+    saveState();
+  }
+  accItems[idx].owner = trimmed;
+  renderAccModalItems();
+  showToast(`已新增成員「${trimmed}」`);
 }
 
 function startReceiptScan() {
