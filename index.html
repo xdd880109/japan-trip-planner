@@ -4687,7 +4687,7 @@ function renderShoppingView() {
   if (peopleTabs) {
     const allChip = `<button class="shop-person-chip ${currentShopPerson === '全部' ? 'active' : ''}" onclick="setShopPersonFilter('全部')">👥 全部</button>`;
     const personChips = state.shopPeople.map(p =>
-      `<button class="shop-person-chip ${currentShopPerson === p ? 'active' : ''}" onclick="setShopPersonFilter('${escHtml(p)}')">${escHtml(p)}<span class="chip-x" onclick="event.stopPropagation();removeShopPerson('${escHtml(p)}')">✕</span></button>`
+      `<button class="shop-person-chip ${currentShopPerson === p ? 'active' : ''}" onclick="setShopPersonFilter('${escHtml(p)}')">${escHtml(p)}<span class="chip-x" onclick="event.stopPropagation();renameShopPerson('${escHtml(p)}')" style="margin-left:5px">✎</span><span class="chip-x" onclick="event.stopPropagation();removeShopPerson('${escHtml(p)}')">✕</span></button>`
     ).join('');
     const addChip = `<button class="shop-add-person-btn" onclick="addShopPerson()">＋ 新增成員</button>`;
     peopleTabs.innerHTML = allChip + personChips + addChip;
@@ -4830,6 +4830,36 @@ function removeShopPerson(person) {
   if (currentShopPerson === person) currentShopPerson = '全部';
   saveState();
   renderShoppingView();
+}
+function renameShopPerson(oldName) {
+  const newName = prompt(`將「${oldName}」改名為：`, oldName);
+  if (newName === null) return;
+  const n = newName.trim();
+  if (!n) { showToast('名稱不能空白'); return; }
+  if (n === oldName) return;
+  if (state.shopPeople.includes(n)) { showToast('已有這個成員'); return; }
+  // 更新成員清單
+  state.shopPeople = state.shopPeople.map(p => p === oldName ? n : p);
+  // 更新購物清單
+  (state.shoppingList || []).forEach(item => {
+    if ((item.person || '我') === oldName) item.person = n;
+    if (item.recipient === oldName) item.recipient = n;
+  });
+  // 更新記帳：付款人 + 商品 owner
+  (state.accounting || []).forEach(r => {
+    if ((r.person || '我') === oldName) r.person = n;
+    (r.items || []).forEach(it => { if (it.owner === oldName) it.owner = n; });
+  });
+  // 更新還款記錄
+  if (state.accSettled && state.accSettled[oldName] !== undefined) {
+    state.accSettled[n] = state.accSettled[oldName];
+    delete state.accSettled[oldName];
+  }
+  if (currentShopPerson === oldName) currentShopPerson = n;
+  if (accFilterPerson === oldName) accFilterPerson = n;
+  saveState();
+  renderShoppingView();
+  showToast(`已改名為「${n}」✓`);
 }
 
 // ── Modal：開啟 / 編輯 ──
