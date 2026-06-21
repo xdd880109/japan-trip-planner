@@ -3442,7 +3442,7 @@ function calcTaxRefund() {
     totalFee += fee;
   });
   totalTax = Math.round(totalTax);
-  totalFee = Math.round(totalFee);
+  totalFee = Math.floor(totalFee); // 手續費無條件捨去（日本算法）
   const refund = Math.max(0, totalTax - totalFee);
   document.getElementById('taxRefundAmount').value = refund;
   const cpnNote = cpnAmt > 0 ? ` (已含優惠券-¥${formatNum(cpnAmt)})` : '';
