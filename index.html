@@ -773,6 +773,47 @@
     cursor: pointer;
     line-height: 1;
   }
+  .debt-card {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .debt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 16px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+  }
+  .debt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-top: 1px solid var(--gray-bg);
+    font-size: 13px;
+  }
+  .debt-person { font-weight: 600; }
+  .debt-amount { text-align: right; }
+  .debt-jpy { font-size: 14px; font-weight: 700; color: #c00; }
+  .debt-twd { font-size: 11px; color: var(--text-sub); margin-top: 1px; }
+  .debt-settled { opacity: 0.4; text-decoration: line-through; }
+  .debt-settle-btn {
+    font-size: 11px;
+    border: 1px solid #34c77b;
+    color: #1a7a4a;
+    background: none;
+    border-radius: 10px;
+    padding: 2px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .debt-settle-btn.done { background: #34c77b; color: white; border-color: #34c77b; }
   .scan-loading {
     display: flex;
     flex-direction: column;
@@ -2489,7 +2530,8 @@ let state = {
   shoppingList: [],
   shopPeople: ['我'],
   accounting: [],
-  paymentCards: []
+  paymentCards: [],
+  accSettled: {}
 };
 
 let currentView = 'home';
@@ -3245,14 +3287,64 @@ function renderAccounting() {
     });
   }
 
+  // 💰 欠款統計：把所有收據的分帳彙總
+  const debtMap = {}; // person → { jpy, settled }
+  const payer = accFilterPerson !== '全部' ? accFilterPerson : null;
+  filtered.forEach(r => {
+    const receiptPayer = r.person || '我';
+    const items = r.items || [];
+    const subtotalAll = items.reduce((s,i) => s + withTax(i), 0);
+    const cpnA = couponDiscount(r);
+    const refA = r.taxRefundAmount || 0;
+    const net = Math.max(0, subtotalAll - cpnA - refA);
+    const ratio = subtotalAll > 0 ? net / subtotalAll : 1;
+    items.forEach(item => {
+      const own = item.owner || receiptPayer;
+      if (own === receiptPayer) return; // 付款人自己的不算
+      if (!debtMap[own]) debtMap[own] = 0;
+      debtMap[own] += Math.floor(withTax(item) * ratio);
+    });
+  });
+  const settled = state.accSettled || {};
+  const TWD_PER_JPY = TWD_RATE; // 1 JPY in TWD
+  const debtPeople = Object.keys(debtMap);
+  let debtHtml = '';
+  if (debtPeople.length > 0) {
+    const rows = debtPeople.map(p => {
+      const jpy = debtMap[p];
+      const twd = Math.round(jpy / TWD_RATE);
+      const isDone = !!settled[p];
+      return `<div class="debt-row ${isDone ? 'debt-settled' : ''}">
+        <div class="debt-person">👤 ${escHtml(p)}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="debt-amount">
+            <div class="debt-jpy">¥${formatNum(jpy)}</div>
+            <div class="debt-twd">≈ NT$${formatNum(twd)}</div>
+          </div>
+          <button class="debt-settle-btn ${isDone?'done':''}" onclick="toggleDebtSettled('${escHtml(p)}')">${isDone?'✓ 已還':'標記還清'}</button>
+        </div>
+      </div>`;
+    }).join('');
+    debtHtml = `<div class="section-title">💰 代購 / 墊款統計</div>
+    <div class="debt-card">${rows}</div>`;
+  }
+
   document.getElementById('accBody').innerHTML =
     apiHint +
+    debtHtml +
     (catBarsHtml ? `<div class="section-title">類別統計</div>${catBarsHtml}<div style="margin-bottom:4px"></div>` : '') +
     listHtml;
 }
 
 function setAccPersonFilter(person) {
   accFilterPerson = person;
+  renderAccounting();
+}
+
+function toggleDebtSettled(person) {
+  if (!state.accSettled) state.accSettled = {};
+  state.accSettled[person] = !state.accSettled[person];
+  saveState();
   renderAccounting();
 }
 
