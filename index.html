@@ -3432,6 +3432,7 @@ function toggleTaxRefund() {} // no-op, kept for compat
 
 function calcTaxRefund() {
   const feeRate = parseFloat(document.getElementById('refundFeeRate').value) || 2;
+  localStorage.setItem('lastFeeRate', String(feeRate));
 
   // 先算商品小計（含稅，含商品折扣）
   let subtotal = 0;
@@ -3485,6 +3486,8 @@ function openAddReceipt() {
   document.getElementById('accStore').value = '';
   document.getElementById('accNotes').value = '';
   setTaxRefundUI(0);
+  // 沿用上次設定的手續費率
+  document.getElementById('refundFeeRate').value = localStorage.getItem('lastFeeRate') || '2';
   accSelectedCard = '';
   setPayMethod('cash');
   document.getElementById('couponValue').value = '';
@@ -3512,6 +3515,7 @@ function openEditReceipt(id) {
   setPayMethod(receipt.paymentMethod || 'cash');
   document.getElementById('couponValue').value = receipt.couponValue || '';
   document.getElementById('couponType').value = receipt.couponType || 'amt';
+  document.getElementById('refundFeeRate').value = receipt.feeRate ?? (localStorage.getItem('lastFeeRate') || '2');
   accItems = (receipt.items || []).map(i => ({ ...i }));
   renderAccModalItems();
   openModal('receiptModal');
@@ -3694,14 +3698,16 @@ function saveReceipt() {
   const cardName = accPayMethod === 'card' ? accSelectedCard : undefined;
   const couponValue = parseFloat(document.getElementById('couponValue').value) || 0;
   const couponType = document.getElementById('couponType').value;
+  const feeRate = parseFloat(document.getElementById('refundFeeRate').value) || 2;
+  localStorage.setItem('lastFeeRate', String(feeRate)); // 記住這次的費率當下次預設
   if (!date) { showToast('請選擇日期'); return; }
   if (accItems.length === 0) { showToast('請新增至少一件商品'); return; }
   if (!state.accounting) state.accounting = [];
   if (editingReceiptId) {
     const idx = state.accounting.findIndex(r => r.id === editingReceiptId);
-    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefundAmount, paymentMethod, cardName, couponValue, couponType, items: [...accItems] };
+    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefundAmount, paymentMethod, cardName, couponValue, couponType, feeRate, items: [...accItems] };
   } else {
-    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefundAmount, paymentMethod, cardName, couponValue, couponType, items: [...accItems] });
+    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefundAmount, paymentMethod, cardName, couponValue, couponType, feeRate, items: [...accItems] });
   }
   saveState();
   closeModal('receiptModal');
