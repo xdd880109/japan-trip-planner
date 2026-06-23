@@ -1993,6 +1993,15 @@
         <button class="acc-add-item-btn" onclick="addManualAccItem()">＋ 手動新增</button>
         <input type="file" id="receiptPhotoInput" accept="image/*" style="display:none" onchange="handleReceiptPhoto(this)">
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#fff7e6;border:1.5px solid #f0a500;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;cursor:pointer" onclick="toggleTaxFree()">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#b37400">🆓 整張免稅（Tax Free）</div>
+          <div style="font-size:11px;color:#c98a00;margin-top:2px">現場免稅結帳，商品不加消費稅</div>
+        </div>
+        <div id="taxFreeToggle" style="width:44px;height:26px;border-radius:13px;background:#ccc;position:relative;transition:background 0.2s;flex-shrink:0">
+          <div style="width:22px;height:22px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+        </div>
+      </div>
       <div class="form-label" style="margin-bottom:8px">商品明細</div>
       <div id="accModalItems"></div>
       <!-- 優惠券 -->
@@ -3178,26 +3187,29 @@ function renderAccounting() {
     return i.taxInclusive ? Math.floor(p * r / (100 + r)) : Math.floor(p * r / 100);
   };
   // 日本收據式分組計稅：同稅率商品先加總，再課一次稅（外稅）
+  // 免稅收據(taxFree)：商品不加稅，直接用折後價
   const receiptGross = (r) => {
     let gross = 0;
-    const exclBase = {}; // 外稅：稅率 → 折後小計
+    const exclBase = {};
     (r.items || []).forEach(i => {
       const base = afterDiscount(i), rate = i.taxRate || 0;
-      if (i.taxInclusive || rate === 0) gross += base;       // 含稅價/無稅直接計入
-      else exclBase[rate] = (exclBase[rate] || 0) + base;     // 外稅累加同稅率
+      if (r.taxFree || i.taxInclusive || rate === 0) gross += base;
+      else exclBase[rate] = (exclBase[rate] || 0) + base;
     });
     Object.entries(exclBase).forEach(([rate, base]) => {
-      gross += base + Math.floor(base * rate / 100);          // 對小計課一次稅
+      gross += base + Math.floor(base * rate / 100);
     });
     return gross;
   };
+  // 應稅額（免稅收據時 = 免稅額，僅供顯示，不計入總額）
   const receiptTax = (r) => {
     let tax = 0;
     const exclBase = {};
     (r.items || []).forEach(i => {
       const base = afterDiscount(i), rate = i.taxRate || 0;
       if (rate === 0) return;
-      if (i.taxInclusive) tax += Math.floor(base * rate / (100 + rate)); // 含稅內含稅額
+      if (r.taxFree) exclBase[rate] = (exclBase[rate] || 0) + base; // 免稅：原本要課的稅
+      else if (i.taxInclusive) tax += Math.floor(base * rate / (100 + rate));
       else exclBase[rate] = (exclBase[rate] || 0) + base;
     });
     Object.entries(exclBase).forEach(([rate, base]) => {
@@ -3205,6 +3217,8 @@ function renderAccounting() {
     });
     return tax;
   };
+  // 單品實付金額（免稅收據用折後價，否則含稅）
+  const itemPaid = (r, i) => r.taxFree ? afterDiscount(i) : withTax(i);
   const couponDiscount = (r) => {
     const subtotal = receiptGross(r);
     const cv = r.couponValue || 0;
@@ -3237,7 +3251,7 @@ function renderAccounting() {
   ACC_CATS.forEach(c => { catSummary[c] = 0; });
   filtered.forEach(r => (r.items || []).forEach(i => {
     const cat = ACC_CATS.includes(i.cat) ? i.cat : '雜貨';
-    catSummary[cat] += withTax(i);
+    catSummary[cat] += itemPaid(r, i);
   }));
   const catIcons = { '美妝':'💄','食物':'🍱','服飾':'👗','交通':'🚃','住宿':'🏨','黑膠':'🎵','雜貨':'🛍️' };
   const maxCat = Math.max(...Object.values(catSummary), 1);
@@ -3292,11 +3306,11 @@ function renderAccounting() {
           const rate = item.taxRate || 0;
           const dAmt = discountAmt(item);
           const taxAmt = taxOf(item);
-          const priceWithTax = withTax(item);
+          const priceWithTax = r.taxFree ? afterDiscount(item) : withTax(item);
           const discBadge = dAmt > 0
             ? `<span style="font-size:10px;color:#e05c00;margin-left:3px">折-¥${formatNum(dAmt)}</span>` : '';
-          const taxLabel = rate > 0 ? (item.taxInclusive ? `含稅¥${formatNum(taxAmt)}` : `+稅¥${formatNum(taxAmt)}`) : '';
-          const taxBadge = rate > 0 ? `<span style="font-size:10px;color:#888;margin-left:3px">(${taxLabel})</span>` : '';
+          const taxLabel = (rate > 0 && !r.taxFree) ? (item.taxInclusive ? `含稅¥${formatNum(taxAmt)}` : `+稅¥${formatNum(taxAmt)}`) : '';
+          const taxBadge = taxLabel ? `<span style="font-size:10px;color:#888;margin-left:3px">(${taxLabel})</span>` : '';
           return `<div class="acc-item-row">
             <div class="acc-item-name">
               <div class="acc-item-cn">${escHtml(item.name || item.nameJp || '（未命名）')}</div>
@@ -3318,7 +3332,7 @@ function renderAccounting() {
           <div class="acc-entry-header">
             <div>
               <div class="acc-entry-store">${escHtml(r.store || '購物')}${payBadge}</div>
-              <div class="acc-entry-meta">${itemCount} 件商品${(r.taxRefundAmount||0) > 0 ? ` · <span style="color:#1a7a4a;font-weight:700">🧾退稅+¥${formatNum(r.taxRefundAmount)}</span>` : (totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : '')}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
+              <div class="acc-entry-meta">${itemCount} 件商品${r.taxFree ? ` · <span style="color:#b37400;font-weight:700">🆓免稅 省¥${formatNum(totalTax)}</span>` : ((r.taxRefundAmount||0) > 0 ? ` · <span style="color:#1a7a4a;font-weight:700">🧾退稅+¥${formatNum(r.taxRefundAmount)}</span>` : (totalTax > 0 ? ` · 稅¥${formatNum(totalTax)}` : ''))}${r.notes ? ' · ' + escHtml(r.notes) : ''}</div>
             </div>
             <div style="text-align:right">
               ${cpnBadge}
@@ -3332,7 +3346,7 @@ function renderAccounting() {
             const ownerTotals = {};
             (r.items||[]).forEach(item => {
               const ow = getItemOwners(item);
-              const share = Math.floor(withTax(item) / ow.length);
+              const share = Math.floor(itemPaid(r, item) / ow.length);
               ow.forEach(own => {
                 if (!ownerTotals[own]) ownerTotals[own] = 0;
                 ownerTotals[own] += share;
@@ -3364,14 +3378,14 @@ function renderAccounting() {
   (state.accounting || []).forEach(r => {
     const payerP = r.person || '我';
     const items = r.items || [];
-    const subtotalAll = items.reduce((s,i) => s + withTax(i), 0);
+    const subtotalAll = items.reduce((s,i) => s + itemPaid(r, i), 0);
     const cpnA = couponDiscount(r);
     const refA = r.taxRefundAmount || 0;
     const netR = Math.max(0, subtotalAll - cpnA - refA);
     const ratio = subtotalAll > 0 ? netR / subtotalAll : 1;
     items.forEach(item => {
       const owners = getItemOwners(item);
-      const totalAmt = Math.floor(withTax(item) * ratio);
+      const totalAmt = Math.floor(itemPaid(r, item) * ratio);
       const share = Math.floor(totalAmt / owners.length); // 每人均分
       owners.forEach(owner => {
         if (owner === payerP) return; // 付款人自己那份不算
@@ -3519,6 +3533,16 @@ function setTaxRefundUI(val) {
 
 function toggleTaxRefund() {} // no-op, kept for compat
 
+let accTaxFree = false;
+function setTaxFreeUI(val) {
+  accTaxFree = val;
+  const toggle = document.getElementById('taxFreeToggle');
+  if (!toggle) return;
+  toggle.style.background = val ? '#f0a500' : '#ccc';
+  toggle.children[0].style.left = val ? '20px' : '2px';
+}
+function toggleTaxFree() { setTaxFreeUI(!accTaxFree); }
+
 function calcTaxRefund() {
   const feeRate = parseFloat(document.getElementById('refundFeeRate').value) || 2;
   localStorage.setItem('lastFeeRate', String(feeRate));
@@ -3575,6 +3599,7 @@ function openAddReceipt() {
   document.getElementById('accStore').value = '';
   document.getElementById('accNotes').value = '';
   setTaxRefundUI(0);
+  setTaxFreeUI(false);
   // 沿用上次設定的手續費率
   document.getElementById('refundFeeRate').value = localStorage.getItem('lastFeeRate') || '2';
   accSelectedCard = '';
@@ -3600,6 +3625,7 @@ function openEditReceipt(id) {
   document.getElementById('accStore').value = receipt.store || '';
   document.getElementById('accNotes').value = receipt.notes || '';
   setTaxRefundUI(receipt.taxRefundAmount || 0);
+  setTaxFreeUI(receipt.taxFree || false);
   accSelectedCard = receipt.cardName || '';
   setPayMethod(receipt.paymentMethod || 'cash');
   document.getElementById('couponValue').value = receipt.couponValue || '';
@@ -3822,9 +3848,9 @@ function saveReceipt() {
   if (!state.accounting) state.accounting = [];
   if (editingReceiptId) {
     const idx = state.accounting.findIndex(r => r.id === editingReceiptId);
-    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefundAmount, paymentMethod, cardName, couponValue, couponType, feeRate, items: [...accItems] };
+    if (idx >= 0) state.accounting[idx] = { ...state.accounting[idx], date, person, store, notes, taxRefundAmount, taxFree: accTaxFree, paymentMethod, cardName, couponValue, couponType, feeRate, items: [...accItems] };
   } else {
-    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefundAmount, paymentMethod, cardName, couponValue, couponType, feeRate, items: [...accItems] });
+    state.accounting.push({ id: 'rec_' + Date.now(), date, person, store, notes, taxRefundAmount, taxFree: accTaxFree, paymentMethod, cardName, couponValue, couponType, feeRate, items: [...accItems] });
   }
   saveState();
   closeModal('receiptModal');
