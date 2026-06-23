@@ -1,4 +1,4 @@
-const CACHE_NAME = 'japan-trip-v16';
+const CACHE_NAME = 'japan-trip-v17';
 const ASSETS = ['/japan-trip-planner/', '/japan-trip-planner/index.html'];
 
 self.addEventListener('install', e => {
