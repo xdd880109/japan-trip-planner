@@ -3177,15 +3177,42 @@ function renderAccounting() {
     const p = afterDiscount(i), r = i.taxRate || 0;
     return i.taxInclusive ? Math.floor(p * r / (100 + r)) : Math.floor(p * r / 100);
   };
+  // 日本收據式分組計稅：同稅率商品先加總，再課一次稅（外稅）
+  const receiptGross = (r) => {
+    let gross = 0;
+    const exclBase = {}; // 外稅：稅率 → 折後小計
+    (r.items || []).forEach(i => {
+      const base = afterDiscount(i), rate = i.taxRate || 0;
+      if (i.taxInclusive || rate === 0) gross += base;       // 含稅價/無稅直接計入
+      else exclBase[rate] = (exclBase[rate] || 0) + base;     // 外稅累加同稅率
+    });
+    Object.entries(exclBase).forEach(([rate, base]) => {
+      gross += base + Math.floor(base * rate / 100);          // 對小計課一次稅
+    });
+    return gross;
+  };
+  const receiptTax = (r) => {
+    let tax = 0;
+    const exclBase = {};
+    (r.items || []).forEach(i => {
+      const base = afterDiscount(i), rate = i.taxRate || 0;
+      if (rate === 0) return;
+      if (i.taxInclusive) tax += Math.floor(base * rate / (100 + rate)); // 含稅內含稅額
+      else exclBase[rate] = (exclBase[rate] || 0) + base;
+    });
+    Object.entries(exclBase).forEach(([rate, base]) => {
+      tax += Math.floor(base * rate / 100);
+    });
+    return tax;
+  };
   const couponDiscount = (r) => {
-    const subtotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
+    const subtotal = receiptGross(r);
     const cv = r.couponValue || 0;
     if (cv <= 0) return 0;
     return r.couponType === 'pct' ? Math.floor(subtotal * cv / 100) : cv;
   };
   const receiptTotal = (r) => {
-    const subtotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
-    return Math.max(0, subtotal - couponDiscount(r) - (r.taxRefundAmount || 0));
+    return Math.max(0, receiptGross(r) - couponDiscount(r) - (r.taxRefundAmount || 0));
   };
   const totalJpy = filtered.reduce((sum, r) => sum + receiptTotal(r), 0);
   document.getElementById('accTotalJpy').textContent = `¥${formatNum(totalJpy)}`;
@@ -3247,8 +3274,8 @@ function renderAccounting() {
       const dateStr = d ? `${d.getMonth()+1}月${d.getDate()}日 (週${WEEKDAYS[d.getDay()]})` : date;
       listHtml += `<div class="section-title">${dateStr}</div>`;
       recs.forEach(r => {
-        const totalTax = (r.items || []).reduce((s, i) => s + taxOf(i), 0);
-        const subtotal = (r.items || []).reduce((s, i) => s + withTax(i), 0);
+        const totalTax = receiptTax(r);
+        const subtotal = receiptGross(r);
         const cpnAmt = couponDiscount(r);
         const refundAmt = r.taxRefundAmount || 0;
         const finalTotal = Math.max(0, subtotal - cpnAmt - refundAmt);
