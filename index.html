@@ -3173,12 +3173,15 @@ function itemAfterDiscountG(item) {
 function itemPaidG(r, i) { return r.taxFree ? itemAfterDiscountG(i) : itemWithTax(i); }
 
 let personItemsTarget = null;
-function showPersonItems(person) {
-  personItemsTarget = person;
-  document.getElementById('personItemsTitle').textContent = `👤 ${person} 的明細`;
+// pairKey = "債務人>債權人"：顯示「債權人付錢、但屬於債務人的商品」
+function showPersonItems(pairKey) {
+  const [debtor, creditor] = pairKey.split('>');
+  personItemsTarget = debtor;
+  document.getElementById('personItemsTitle').textContent = `${debtor} 欠 ${creditor} 的明細`;
   const rows = [];
   let total = 0;
   (state.accounting || []).forEach(r => {
+    if ((r.person || '我') !== creditor) return; // 只看「債權人付的」收據
     const items = r.items || [];
     const subtotalAll = items.reduce((s,i) => s + itemPaidG(r, i), 0);
     const cv = r.couponValue || 0;
@@ -3187,7 +3190,7 @@ function showPersonItems(person) {
     const ratio = subtotalAll > 0 ? netR / subtotalAll : 1;
     items.forEach(item => {
       const owners = getItemOwners(item);
-      if (!owners.includes(person)) return;
+      if (!owners.includes(debtor)) return;       // 只看屬於債務人的商品
       const share = Math.floor(Math.floor(itemPaidG(r, item) / owners.length) * ratio);
       total += share;
       const d = parseDate(r.date);
@@ -3204,9 +3207,9 @@ function showPersonItems(person) {
   });
   const body = document.getElementById('personItemsBody');
   if (rows.length === 0) {
-    body.innerHTML = `<div style="text-align:center;color:var(--gray-text);padding:30px">這個人目前沒有商品</div>`;
+    body.innerHTML = `<div style="text-align:center;color:var(--gray-text);padding:30px">沒有相關商品</div>`;
   } else {
-    body.innerHTML = `<div style="font-size:13px;color:var(--text-sub);margin-bottom:8px">共 ${rows.length} 件商品</div>${rows.join('')}
+    body.innerHTML = `<div style="font-size:13px;color:var(--text-sub);margin-bottom:8px">${creditor} 幫 ${debtor} 付的 ${rows.length} 件商品</div>${rows.join('')}
       <div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-size:16px;font-weight:700">
         <span>合計</span><span style="color:#c00">¥${formatNum(total)}</span>
       </div>`;
@@ -3500,10 +3503,9 @@ function renderAccounting() {
         label = `${debtor} → ${creditor}`; dir = 'in'; if (!isDone) owedToMe += amt;
       }
       const color = dir === 'out' ? '#1a7a4a' : '#c00';
-      // 點人名 → 看那個人買了什麼（drill 對象：欠錢的人 debtor，或我欠的對象 creditor）
-      const drillP = (me && creditor !== me) ? creditor : debtor;
+      // 點人名 → 看「債權人幫債務人付了哪些商品」
       return `<div class="debt-row ${isDone ? 'debt-settled' : ''}">
-        <div class="debt-person" style="cursor:pointer;color:#5c35c4" onclick="showPersonItems('${escHtml(drillP)}')">👤 ${escHtml(label)} <span style="font-size:11px">🔍</span></div>
+        <div class="debt-person" style="cursor:pointer;color:#5c35c4" onclick="showPersonItems('${escHtml(k)}')">👤 ${escHtml(label)} <span style="font-size:11px">🔍</span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <div class="debt-jpy" style="color:${color}">¥${formatNum(amt)}</div>
           <button class="debt-settle-btn ${isDone?'done':''}" onclick="toggleDebtSettled('${escHtml(k)}')">${isDone?'✓ 已結':'標記結清'}</button>
