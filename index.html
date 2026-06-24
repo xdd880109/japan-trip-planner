@@ -2462,6 +2462,19 @@
   </div>
 </div>
 
+<!-- PERSON ITEMS MODAL -->
+<div class="modal-overlay" id="personItemsModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeModal('personItemsModal')">✕</button>
+      <div class="modal-title" id="personItemsTitle">明細</div>
+      <button class="btn-danger-small" onclick="renamePersonFromModal()">改名</button>
+    </div>
+    <div class="modal-body" id="personItemsBody"></div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -3152,6 +3165,61 @@ function itemWithTax(item) {
   const r = item.taxRate || 0;
   return item.taxInclusive ? afterD : afterD + Math.floor(afterD * r / 100);
 }
+function itemAfterDiscountG(item) {
+  const p = item.price || 0, d = item.discount || 0;
+  return d > 0 ? (item.discountType === 'amt' ? Math.max(0, p - d) : Math.floor(p * (100 - d) / 100)) : p;
+}
+// 單品實付（免稅收據用折後價，否則含稅）
+function itemPaidG(r, i) { return r.taxFree ? itemAfterDiscountG(i) : itemWithTax(i); }
+
+let personItemsTarget = null;
+function showPersonItems(person) {
+  personItemsTarget = person;
+  document.getElementById('personItemsTitle').textContent = `👤 ${person} 的明細`;
+  const rows = [];
+  let total = 0;
+  (state.accounting || []).forEach(r => {
+    const items = r.items || [];
+    const subtotalAll = items.reduce((s,i) => s + itemPaidG(r, i), 0);
+    const cv = r.couponValue || 0;
+    const cpnA = cv > 0 ? (r.couponType === 'pct' ? Math.floor(subtotalAll * cv / 100) : cv) : 0;
+    const netR = Math.max(0, subtotalAll - cpnA - (r.taxRefundAmount || 0));
+    const ratio = subtotalAll > 0 ? netR / subtotalAll : 1;
+    items.forEach(item => {
+      const owners = getItemOwners(item);
+      if (!owners.includes(person)) return;
+      const share = Math.floor(Math.floor(itemPaidG(r, item) / owners.length) * ratio);
+      total += share;
+      const d = parseDate(r.date);
+      const dateStr = d ? `${d.getMonth()+1}/${d.getDate()}` : '';
+      const shared = owners.length > 1 ? `<span style="font-size:10px;color:#7c4dff"> (${owners.length}人均分)</span>` : '';
+      rows.push(`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--gray-bg)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600">${escHtml(item.name || item.nameJp || '（未命名）')}${shared}</div>
+          <div style="font-size:11px;color:var(--text-sub)">${escHtml(r.store || '購物')} · ${dateStr} · ${escHtml(item.cat || '雜貨')}</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;white-space:nowrap;margin-left:8px">¥${formatNum(share)}</div>
+      </div>`);
+    });
+  });
+  const body = document.getElementById('personItemsBody');
+  if (rows.length === 0) {
+    body.innerHTML = `<div style="text-align:center;color:var(--gray-text);padding:30px">這個人目前沒有商品</div>`;
+  } else {
+    body.innerHTML = `<div style="font-size:13px;color:var(--text-sub);margin-bottom:8px">共 ${rows.length} 件商品</div>${rows.join('')}
+      <div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-size:16px;font-weight:700">
+        <span>合計</span><span style="color:#c00">¥${formatNum(total)}</span>
+      </div>`;
+  }
+  openModal('personItemsModal');
+}
+function renamePersonFromModal() {
+  if (!personItemsTarget) return;
+  const old = personItemsTarget;
+  closeModal('personItemsModal');
+  renameShopPerson(old);
+}
+
 let accFilterPerson = '全部';
 let accItems = [];
 
@@ -3159,13 +3227,16 @@ function renderAccounting() {
   const accounting = state.accounting || [];
   const shopPeople = state.shopPeople || ['我'];
 
-  // Person filter chips（含改名 ✎ / 刪除 ✕ / 新增 ＋）
+  // Person filter chips：只顯示「同行者」（有付過錢的人）。代購對象不在此顯示。
+  const payers = [...new Set(accounting.map(r => r.person || '我'))];
+  const companions = shopPeople.filter(p => payers.includes(p));
+  if (companions.length === 0) companions.push(shopPeople[0] || '我');
+  if (accFilterPerson !== '全部' && !companions.includes(accFilterPerson)) companions.push(accFilterPerson);
   const allChip = `<span class="acc-person-chip ${accFilterPerson === '全部' ? 'active' : ''}" onclick="setAccPersonFilter('全部')">全部</span>`;
-  const personChips = shopPeople.map(p =>
-    `<span class="acc-person-chip ${accFilterPerson === p ? 'active' : ''}" onclick="setAccPersonFilter('${escHtml(p)}')">${escHtml(p)}<span class="chip-x" onclick="event.stopPropagation();renameMember('${escHtml(p)}')" style="margin-left:5px">✎</span><span class="chip-x" onclick="event.stopPropagation();removeMember('${escHtml(p)}')">✕</span></span>`
+  const personChips = companions.map(p =>
+    `<span class="acc-person-chip ${accFilterPerson === p ? 'active' : ''}" onclick="setAccPersonFilter('${escHtml(p)}')">${escHtml(p)}<span class="chip-x" onclick="event.stopPropagation();renameMember('${escHtml(p)}')" style="margin-left:5px">✎</span></span>`
   ).join('');
-  const addChip = `<span class="acc-person-chip" style="border-style:dashed" onclick="addMember()">＋ 成員</span>`;
-  document.getElementById('accPersonChips').innerHTML = allChip + personChips + addChip;
+  document.getElementById('accPersonChips').innerHTML = allChip + personChips;
 
   // Filter by person
   const filtered = accFilterPerson === '全部' ? accounting : accounting.filter(r => r.person === accFilterPerson);
@@ -3429,8 +3500,10 @@ function renderAccounting() {
         label = `${debtor} → ${creditor}`; dir = 'in'; if (!isDone) owedToMe += amt;
       }
       const color = dir === 'out' ? '#1a7a4a' : '#c00';
+      // 點人名 → 看那個人買了什麼（drill 對象：欠錢的人 debtor，或我欠的對象 creditor）
+      const drillP = (me && creditor !== me) ? creditor : debtor;
       return `<div class="debt-row ${isDone ? 'debt-settled' : ''}">
-        <div class="debt-person">👤 ${escHtml(label)}</div>
+        <div class="debt-person" style="cursor:pointer;color:#5c35c4" onclick="showPersonItems('${escHtml(drillP)}')">👤 ${escHtml(label)} <span style="font-size:11px">🔍</span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <div class="debt-jpy" style="color:${color}">¥${formatNum(amt)}</div>
           <button class="debt-settle-btn ${isDone?'done':''}" onclick="toggleDebtSettled('${escHtml(k)}')">${isDone?'✓ 已結':'標記結清'}</button>
